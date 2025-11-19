@@ -8,6 +8,9 @@ from flask_socketio import SocketIO
 import threading
 from collections import deque
 from datetime import datetime
+from collections import deque
+import time
+
 
 class ArducamTracker:
     def __init__(self, camera_index=0, width=1980, height=1080):
@@ -24,7 +27,7 @@ class ArducamTracker:
         self.initialize_arducam()
         
         # Tracking variables
-        self.trajectory = deque(maxlen=50)
+        self.trajectory = deque(maxlen=500)
         self.detection_log = []
         self.current_position = None
         self.tracking_enabled = True
@@ -33,6 +36,12 @@ class ArducamTracker:
         self.frame_count = 0
         self.start_time = time.time()
         self.test_counter = 0
+
+        self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(
+            history=200,
+            varThreshold=16,
+            detectShadows=False
+        )
         
         # Flask setup
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -113,261 +122,809 @@ class ArducamTracker:
             return """<!DOCTYPE html>
 <html>
 <head>
-    <title>Brown Box Tracker</title>
+    <title>WALL-E</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            margin: 0; 
-            padding: 20px; 
-            background: #f5f5f5; 
+        :root {
+            --bg-main: #050608;
+            --bg-panel: #0b0d10;
+            --bg-panel-alt: #111318;
+            --border-soft: #1f2933;
+            --accent: #ffffff;
+            --accent-soft: rgba(249, 115, 22, 0.2);
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --danger: #ef4444;
+            --success: #22c55e;
         }
-        .container { 
-            max-width: 1200px; 
-            margin: 0 auto; 
-            background: white; 
-            padding: 20px; 
-            border-radius: 10px; 
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+
+        * {
+            box-sizing: border-box;
         }
-        .header { 
-            text-align: center; 
-            margin-bottom: 30px; 
-            border-bottom: 2px solid #eee; 
-            padding-bottom: 20px; 
+
+        body {
+            font-family: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            margin: 0;
+            padding: 24px;
+            background: radial-gradient(circle at top, #111827 0, #02040a 45%, #000000 100%);
+            color: var(--text-main);
         }
-        .dashboard { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 20px; 
-            margin-bottom: 20px; 
+
+        .container {
+            max-width: 1320px;
+            margin: 0 auto;
+            background: linear-gradient(145deg, rgba(6, 9, 18, 0.9), rgba(3, 7, 18, 0.98));
+            padding: 20px 24px 28px 24px;
+            border-radius: 18px;
+            border: 1px solid rgba(31, 41, 55, 0.9);
+            box-shadow:
+                0 24px 80px rgba(0, 0, 0, 0.9),
+                0 0 0 1px rgba(12, 17, 28, 0.9);
+            backdrop-filter: blur(12px);
         }
-        .video-container { 
-            grid-column: 1 / -1; 
-            text-align: center; 
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(55, 65, 81, 0.7);
         }
-        .stats-panel, .controls-panel { 
-            background: #f8f9fa; 
-            padding: 15px; 
-            border-radius: 8px; 
-            border-left: 4px solid #007bff; 
+
+        .header-left h1 {
+            font-size: 24px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            margin: 0 0 4px 0;
+            color: var(--text-main);
         }
-        .controls { 
-            display: flex; 
-            gap: 10px; 
-            margin: 15px 0; 
+
+        .header-left .subline {
+            font-size: 12px;
+            letter-spacing: 0.24em;
+            text-transform: uppercase;
+            color: var(--text-muted);
         }
-        button { 
-            padding: 10px 20px; 
-            border: none; 
-            border-radius: 5px; 
-            cursor: pointer; 
-            font-size: 14px; 
-            transition: background 0.3s; 
+
+        .header-right {
+            text-align: right;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+            color: var(--text-muted);
         }
-        .btn-start { background: #28a745; color: white; }
-        .btn-stop { background: #dc3545; color: white; }
-        .btn-clear { background: #6c757d; color: white; }
-        button:hover { opacity: 0.9; }
-        .status { 
-            padding: 10px; 
-            border-radius: 5px; 
-            margin: 10px 0; 
-            font-weight: bold; 
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(75, 85, 99, 0.8);
+            font-size: 11px;
         }
-        .detected { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .not-detected { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .logs { 
-            height: 200px; 
-            overflow-y: auto; 
-            border: 1px solid #ddd; 
-            padding: 10px; 
-            background: #fafafa; 
-            border-radius: 5px; 
-            font-family: monospace; 
-            font-size: 12px; 
+
+        .status-indicator {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: var(--success);
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
         }
-        .stat-item { 
-            margin: 8px 0; 
-            display: flex; 
-            justify-content: space-between; 
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 2.2fr 1.2fr;
+            gap: 18px;
         }
-        .stat-value { 
-            font-weight: bold; 
-            color: #007bff; 
+
+        .left-column,
+        .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
         }
-        #trajectoryPlot { 
-            background: white; 
-            border-radius: 8px; 
-            padding: 10px; 
-            margin-top: 20px; 
+
+        .panel {
+            background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.9), rgba(15, 15, 20, 0.98));
+            border-radius: 14px;
+            border: 1px solid rgba(31, 41, 55, 0.9);
+            padding: 14px 14px 16px 14px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .panel::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at top left, rgba(249, 115, 22, 0.08), transparent 55%);
+            opacity: 0.9;
+            pointer-events: none;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .panel-title {
+            font-size: 12px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .panel-title span {
+            color: var(--accent);
+        }
+
+        .panel-tag {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: var(--text-muted);
+            background: rgba(17, 24, 39, 0.9);
+            padding: 3px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(55, 65, 81, 0.9);
+        }
+
+        .video-layout {
+            display: grid;
+            grid-template-columns: auto minmax(260px, 1fr);
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        #videoFeed {
+            border-radius: 10px;
+            border: 1px solid rgba(75, 85, 99, 0.9);
+            background: #000;
+            display: block;
+        }
+
+        .log-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            height: 100%;
+        }
+
+        .logs {
+            flex: 1;
+            min-height: 160px;
+            max-height: 360px;
+            overflow-y: auto;
+            border-radius: 10px;
+            border: 1px solid rgba(31, 41, 55, 0.9);
+            background: rgba(3, 7, 18, 0.96);
+            padding: 8px 10px;
+            font-family: ui-monospace, SFMonoRegular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 11px;
+            color: var(--text-main);
+        }
+
+        .logs::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .logs::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .logs::-webkit-scrollbar-thumb {
+            background: rgba(75, 85, 99, 0.9);
+            border-radius: 999px;
+        }
+
+        .log-entry {
+            display: grid;
+            grid-template-columns: 90px 1fr;
+            column-gap: 8px;
+            row-gap: 2px;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(30, 41, 59, 0.6);
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-timestamp {
+            color: var(--accent);
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .log-content {
+            color: var(--text-muted);
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .stat-card {
+            background: rgba(3, 7, 18, 0.96);
+            border-radius: 10px;
+            border: 1px solid rgba(31, 41, 55, 0.9);
+            padding: 8px 10px;
+            font-size: 11px;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        .stat-value.accent {
+            color: var(--accent);
+        }
+
+        .stat-value.success {
+            color: var(--success);
+        }
+
+        .stat-value.danger {
+            color: var(--danger);
+        }
+
+        .controls-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 7px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(75, 85, 99, 0.9);
+            background: linear-gradient(135deg, #020617, #020617);
+            color: var(--text-main);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            cursor: pointer;
+            outline: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(249, 115, 22, 0.25), transparent);
+            opacity: 0;
+            transition: opacity 120ms ease;
+        }
+
+        button:hover::before {
+            opacity: 1;
+        }
+
+        .btn-start {
+            border-color: rgba(34, 197, 94, 0.8);
+        }
+
+        .btn-stop {
+            border-color: rgba(248, 113, 113, 0.9);
+        }
+
+        .btn-clear {
+            border-color: rgba(107, 114, 128, 0.9);
+        }
+
+        .status {
+            padding: 8px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(31, 41, 55, 0.9);
+            font-size: 11px;
+            background: rgba(3, 7, 18, 0.96);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: var(--text-muted);
+        }
+
+        .status-line {
+            font-family: ui-monospace, SFMonoRegular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 11px;
+            color: var(--text-main);
+        }
+
+        .status-detected {
+            border-color: rgba(34, 197, 94, 0.8);
+            box-shadow: 0 0 24px rgba(34, 197, 94, 0.28);
+        }
+
+        .status-idle {
+            border-color: rgba(75, 85, 99, 0.9);
+        }
+
+        #trajectoryPlot {
+            width: 100%;
+            height: 220px;
+        }
+
+        .trajectory-wrapper {
+            border-radius: 10px;
+            border: 1px solid rgba(31, 41, 55, 0.9);
+            background: rgba(3, 7, 18, 0.96);
+            padding: 6px;
+        }
+
+        .trajectory-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--text-muted);
+        }
+
+        .trajectory-meta span {
+            color: var(--accent);
+        }
+
+        @media (max-width: 1024px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            .video-layout {
+                grid-template-columns: 1fr;
+            }
+            .logs {
+                max-height: 200px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            body {
+                padding: 12px;
+            }
+            .container {
+                padding: 14px;
+            }
+            #videoFeed {
+                width: 100%;
+                height: auto;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>📦 Brown Box Tracker</h1>
-            <p>Real-time object tracking and trajectory analysis</p>
-        </div>
-
-        <div class="dashboard">
-            <div class="video-container">
-                <img id="videoFeed" src="/video_feed" width="640" height="480" style="border: 2px solid #ddd; border-radius: 8px;">
+        <header class="header">
+            <div class="header-left">
+                <h1>WALL-E</h1>
+                <div class="subline">Democratizing trash collection</div>
             </div>
-
-            <div class="stats-panel">
-                <h3>📊 System Statistics</h3>
-                <div class="stat-item">Detection Count: <span id="statDetections" class="stat-value">0</span></div>
-                <div class="stat-item">FPS: <span id="statFPS" class="stat-value">0</span></div>
-                <div class="stat-item">Trajectory Points: <span id="statTrajectory" class="stat-value">0</span></div>
-                <div class="stat-item">Log Entries: <span id="statLogs" class="stat-value">0</span></div>
-                <div class="stat-item">Tracking Status: <span id="statTracking" class="stat-value">Active</span></div>
-                <div class="stat-item">Camera: 
-                    <span id="statCamera" class="stat-value">Arducam</span>
+            <div class="header-right">
+                <div class="status-pill">
+                    <div class="status-indicator" id="globalStatusIndicator"></div>
+                    <span id="globalStatusText">Tracking Online</span>
                 </div>
-                <div class="stat-item">Resolution: 
-                    <span id="statResolution" class="stat-value">1280x720</span>
-                </div>
+                <div style="margin-top: 6px;">Team 01</div>
             </div>
+        </header>
 
-            <div class="controls-panel">
-                <h3>⚙️ Controls</h3>
-                <div class="controls">
-                    <button class="btn-start" onclick="toggleTracking(true)">▶ Start Tracking</button>
-                    <button class="btn-stop" onclick="toggleTracking(false)">⏹ Stop Tracking</button>
-                    <button class="btn-clear" onclick="clearLogs()">🗑 Clear Logs</button>
+        <main class="dashboard">
+            <section class="left-column">
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title"><span>Feed</span> / Detection Channel</div>
+                        <div class="panel-tag">Camera Link</div>
+                    </div>
+                    <div class="video-layout">
+                        <img id="videoFeed" src="/video_feed" width="640" height="480" alt="Video feed">
+                        <div class="log-panel">
+                            <div class="panel-header" style="margin-bottom: 4px;">
+                                <div class="panel-title"><span>Log</span> / Detection Events</div>
+                                <div class="panel-tag" id="logCountTag">0 entries</div>
+                            </div>
+                            <div class="logs" id="logContainer">
+                                <div id="logs"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div id="status" class="status not-detected">
-                    🔍 Status: Waiting for box detection...
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title"><span>Trajectory</span> / Position History</div>
+                        <div class="panel-tag">Pixels Space</div>
+                    </div>
+                    <div class="trajectory-wrapper">
+                        <div class="trajectory-meta">
+                            <div>Plot: X vs Y</div>
+                            <div>Anchor: <span>Top Left</span></div>
+                        </div>
+                        <div id="trajectoryPlot"></div>
+                    </div>
                 </div>
-            </div>
-        </div>
+            </section>
 
-        <div id="trajectoryPlot" style="width:100%; height:400px;"></div>
+            <section class="right-column">
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title"><span>System</span> / Telemetry</div>
+                        <div class="panel-tag" id="cameraModeTag">Arducam Live</div>
+                    </div>
+                    <div class="stat-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Detections</div>
+                            <div class="stat-value accent" id="statDetections">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Frame Rate</div>
+                            <div class="stat-value" id="statFPS">0.0 fps</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Trajectory Points</div>
+                            <div class="stat-value" id="statTrajectory">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Log Entries</div>
+                            <div class="stat-value" id="statLogs">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Tracking Status</div>
+                            <div class="stat-value success" id="statTracking">Active</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Resolution</div>
+                            <div class="stat-value" id="statResolution">1280 x 720</div>
+                        </div>
+                    </div>
+                </div>
 
-        <div>
-            <h3>📋 Detection Log</h3>
-            <div class="logs" id="logContainer">
-                <div id="logs"></div>
-            </div>
-        </div>
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title"><span>Control</span> / Session</div>
+                        <div class="panel-tag">Command</div>
+                    </div>
+                    <div class="controls-row">
+                        <div class="controls">
+                            <button class="btn-start" onclick="toggleTracking(true)">Start</button>
+                            <button class="btn-stop" onclick="toggleTracking(false)">Stop</button>
+                            <button class="btn-clear" onclick="clearLogs()">Clear Log</button>
+                        </div>
+                    </div>
+                    <div id="status" class="status status-idle">
+                        <div class="status-header">
+                            <span>Status</span>
+                            <span id="statusModeLabel">Idle</span>
+                        </div>
+                        <div class="status-line" id="statusLine1">Waiting for box detection.</div>
+                        <div class="status-line" id="statusLine2">No active target.</div>
+                    </div>
+                </div>
+            </section>
+        </main>
     </div>
 
     <script>
         const socket = io();
-        let trajectoryData = { x: [], y: [], time: [] };
+        let trajectoryData = { x: [], y: [] };
         let lastUpdate = Date.now();
-        
+        let logEntries = 0;
+        let trajectoryPoints = [];
+        const TRAJECTORY_WINDOW_MS = 3000;
+        let lastDetectionTime = 0;
+        const DETECTION_TIMEOUT_MS = 20;
+        let trajMaxX = 1920;  
+        let trajMaxY = 1080;
+
         socket.on('detection_update', function(data) {
             updateStatus(data);
             updateTrajectory(data);
             addLog(data);
         });
-        
+
         socket.on('system_stats', function(data) {
             updateStats(data);
         });
-        
+
         socket.on('logs_cleared', function() {
             document.getElementById('logs').innerHTML = '';
-            trajectoryData = { x: [], y: [], time: [] };
+            trajectoryPoints = [];
+            logEntries = 0;
+            updateLogCount();
             updatePlot();
         });
-        
+
+
         function toggleTracking(enabled) {
             socket.emit('toggle_tracking', { enabled: enabled });
         }
-        
+
         function clearLogs() {
             socket.emit('clear_logs');
         }
-        
+
         function updateStatus(data) {
             const statusDiv = document.getElementById('status');
+            const statusModeLabel = document.getElementById('statusModeLabel');
+            const statusLine1 = document.getElementById('statusLine1');
+            const statusLine2 = document.getElementById('statusLine2');
+            const globalIndicator = document.getElementById('globalStatusIndicator');
+            const globalText = document.getElementById('globalStatusText');
+
             const now = Date.now();
-            const elapsed = now - lastUpdate;
-            lastUpdate = now;
-            
-            statusDiv.innerHTML = `✅ Box detected at (${Math.round(data.x)}, ${Math.round(data.y)})<br>
-                                  📏 Size: ${data.width}×${data.height} | 🚀 Speed: ${data.speed ? data.speed.toFixed(1) : '0'} px/frame<br>
-                                  🧭 Direction: ${data.direction ? data.direction.toFixed(1) + '°' : 'N/A'}`;
-            statusDiv.className = 'status detected';
+            lastDetectionTime = now;  // remember last time we saw a target
+
+            const x = Math.round(data.x);
+            const y = Math.round(data.y);
+            // const speed = data.speed ? data.speed.toFixed(1) : '0.0';
+            // const direction = data.direction ? data.direction.toFixed(1) + ' deg' : 'N/A';
+
+            statusDiv.classList.remove('status-idle');
+            statusDiv.classList.add('status-detected');
+            statusModeLabel.textContent = 'Target Locked';
+
+            statusLine1.textContent = `[COORD] x=${x}, y=${y}  size=${data.width}x${data.height}`;
+            // statusLine2.textContent = `[MOTION] speed=${speed} px/frame  heading=${direction}`;
+
+            globalIndicator.style.background = '#22c55e';
+            globalIndicator.style.boxShadow = '0 0 10px rgba(34, 197, 94, 0.9)';
+            globalText.textContent = 'Tracking Online';
         }
-        
+
+        function updateIdleStatusIfStale() {
+            const now = Date.now();
+            if (now - lastDetectionTime > DETECTION_TIMEOUT_MS) {
+                const statusDiv = document.getElementById('status');
+                const statusModeLabel = document.getElementById('statusModeLabel');
+                const statusLine1 = document.getElementById('statusLine1');
+                const statusLine2 = document.getElementById('statusLine2');
+                const globalIndicator = document.getElementById('globalStatusIndicator');
+                const globalText = document.getElementById('globalStatusText');
+
+                statusDiv.classList.remove('status-detected');
+                statusDiv.classList.add('status-idle');
+                statusModeLabel.textContent = 'Idle';
+
+                statusLine1.textContent = 'Waiting for box detection.';
+                statusLine2.textContent = 'No active target.';
+            }
+        }
+
+
+
         function updateTrajectory(data) {
             const now = Date.now();
-            trajectoryData.x.push(data.x);
-            trajectoryData.y.push(data.y);
-            trajectoryData.time.push(now);
-            
-            // Keep only last 50 points
-            if (trajectoryData.x.length > 50) {
-                trajectoryData.x.shift();
-                trajectoryData.y.shift();
-                trajectoryData.time.shift();
-            }
-            
+
+            // Add new point with timestamp
+            trajectoryPoints.push({
+                x: data.x,
+                y: data.y,
+                t: now
+            });
+
+            // Keep only points from the last TRAJECTORY_WINDOW_MS
+            trajectoryPoints = trajectoryPoints.filter(p => now - p.t <= TRAJECTORY_WINDOW_MS);
+
             updatePlot();
         }
 
 
-        // Update stats with resolution
-        socket.on('system_stats', function(data) {
-            updateStats(data);
-            document.getElementById('statCamera').textContent = data.test_mode ? 'Test Mode' : 'Arducam Live';
-            document.getElementById('statCamera').style.color = data.test_mode ? '#ffc107' : '#28a745';
-            document.getElementById('statResolution').textContent = data.resolution || '1280x720';
+    function updatePlot() {
+        const plotEl = document.getElementById('trajectoryPlot');
+        if (!plotEl) return;
+
+        const now = Date.now();
+
+        // drop old points
+        trajectoryPoints = trajectoryPoints.filter(
+            p => now - p.t <= TRAJECTORY_WINDOW_MS
+        );
+
+        const layoutBase = {
+            margin: { l: 40, r: 10, t: 4, b: 30 },
+            xaxis: {
+                title: { text: 'X (px)', font: { size: 10 } },
+                range: [0, trajMaxX],
+                gridcolor: '#1f2933',
+                zeroline: false
+            },
+            yaxis: {
+                title: { text: 'Y (px)', font: { size: 10 } },
+                range: [trajMaxY, 0],
+                gridcolor: '#1f2933',
+                zeroline: false,
+                scaleanchor: 'x'
+            },
+            showlegend: false,
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#f9fafb', size: 10 }
+        };
+
+        if (trajectoryPoints.length === 0) {
+            Plotly.react(
+                'trajectoryPlot',
+                [],
+                layoutBase,
+                { displayModeBar: false, staticPlot: true }  // no zoom or drag
+            );
+            return;
+        }
+
+        const xs = trajectoryPoints.map(p => p.x);
+        const ys = trajectoryPoints.map(p => p.y);
+        const opacities = trajectoryPoints.map(p => {
+            const age = now - p.t;
+            const alpha = Math.max(0, Math.min(1, 1 - age / TRAJECTORY_WINDOW_MS));
+            return alpha;
         });
-        
-        function updatePlot() {
-            const plotData = [{
-                x: trajectoryData.x,
-                y: trajectoryData.y,
-                mode: 'lines+markers',
-                type: 'scatter',
-                name: 'Trajectory',
-                line: { color: 'blue', width: 2 },
-                marker: { color: 'red', size: 6 }
-            }];
-            
-            const layout = {
-                title: 'Box Trajectory Over Time',
-                xaxis: { title: 'X Position (pixels)', range: [0, 640] },
-                yaxis: { title: 'Y Position (pixels)', range: [480, 0], scaleanchor: "x" },
-                showlegend: false
-            };
-            
-            Plotly.react('trajectoryPlot', plotData, layout);
-        }
-        
+
+        const trace = {
+            x: xs,
+            y: ys,
+            mode: 'lines+markers',
+            type: 'scatter',
+            line: {
+                width: 5,
+                shape: 'spline'
+            },
+            marker: {
+                size: 9,
+                opacity: opacities
+            }
+        };
+
+        Plotly.react(
+            'trajectoryPlot',
+            [trace],
+            layoutBase,
+            { displayModeBar: false, staticPlot: true }
+        );
+    }
+
+
+
+
         function updateStats(data) {
-            document.getElementById('statDetections').textContent = data.detection_count;
-            document.getElementById('statFPS').textContent = data.fps.toFixed(1);
-            document.getElementById('statTrajectory').textContent = data.trajectory_length;
-            document.getElementById('statLogs').textContent = data.log_entries;
-            document.getElementById('statTracking').textContent = data.tracking_enabled ? 'Active' : 'Paused';
-            document.getElementById('statTracking').style.color = data.tracking_enabled ? '#28a745' : '#dc3545';
-        }
-        
+            const detEl = document.getElementById('statDetections');
+            const fpsEl = document.getElementById('statFPS');
+            const trajEl = document.getElementById('statTrajectory');
+            const logsEl = document.getElementById('statLogs');
+            const trackEl = document.getElementById('statTracking');
+            const resEl = document.getElementById('statResolution');
+            const modeTag = document.getElementById('cameraModeTag');
+            const globalIndicator = document.getElementById('globalStatusIndicator');
+            const globalText = document.getElementById('globalStatusText');
+
+            detEl.textContent = data.detection_count;
+            fpsEl.textContent = `${data.fps.toFixed(1)} fps`;
+            trajEl.textContent = data.trajectory_length;
+
+            // use frontend counter for logs
+            logsEl.textContent = logEntries;
+
+            // parse resolution string like "1920x1080"
+            if (data.resolution) {
+                resEl.textContent = data.resolution.replace('x', ' x ');
+                const parts = data.resolution.split('x');
+                if (parts.length === 2) {
+                    const w = parseInt(parts[0].trim(), 10);
+                    const h = parseInt(parts[1].trim(), 10);
+                    if (!Number.isNaN(w) && !Number.isNaN(h)) {
+                        trajMaxX = w;
+                        trajMaxY = h;
+                    }
+                }
+            } else {
+                resEl.textContent = '1280 x 720';
+                trajMaxX = 1280;
+                trajMaxY = 720;
+            }
+
+            if (data.tracking_enabled) {
+                trackEl.textContent = 'Active';
+                trackEl.classList.remove('danger');
+                trackEl.classList.add('success');
+                globalIndicator.style.background = '#22c55e';
+                globalIndicator.style.boxShadow = '0 0 10px rgba(34, 197, 94, 0.9)';
+                globalText.textContent = 'Tracking Online';
+            } else {
+                trackEl.textContent = 'Paused';
+                trackEl.classList.remove('success');
+                trackEl.classList.add('danger');
+                globalIndicator.style.background = '#ef4444';
+                globalIndicator.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.9)';
+                globalText.textContent = 'Tracking Paused';
+            }
+
+            modeTag.textContent = data.test_mode ? 'Test Mode' : 'Arducam Live';
+}
+
         function addLog(data) {
             const logsDiv = document.getElementById('logs');
+            const logContainer = document.getElementById('logContainer');
             const timestamp = new Date().toLocaleTimeString();
-            const logEntry = document.createElement('div');
-            logEntry.innerHTML = `<span style="color: #666;">[${timestamp}]</span> 
-                                📍 X: ${Math.round(data.x)}, Y: ${Math.round(data.y)} 
-                                📏 ${data.width}×${data.height} 
-                                🚀 ${data.speed ? data.speed.toFixed(1) : '0'} px/frame`;
-            logsDiv.appendChild(logEntry);
-            logsDiv.scrollTop = logsDiv.scrollHeight;
+
+            const x = Math.round(data.x);
+            const y = Math.round(data.y);
+            // const speed = data.speed ? data.speed.toFixed(1) : '0.0';
+
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+
+            const ts = document.createElement('div');
+            ts.className = 'log-timestamp';
+            ts.textContent = `[${timestamp}]`;
+
+            const content = document.createElement('div');
+            content.className = 'log-content';
+            content.textContent = `coord: x=${x}, y=${y}  size=${data.width}x${data.height}`;
+
+            entry.appendChild(ts);
+            entry.appendChild(content);
+            logsDiv.appendChild(entry);
+
+            logEntries += 1;
+            updateLogCount();
+
+            // auto scroll to bottom
+            logContainer.scrollTop = logContainer.scrollHeight;
         }
-        
-        // Initialize plot
+
+        function updateLogCount() {
+            const tag = document.getElementById('logCountTag');
+            tag.textContent = `${logEntries} entries`;
+            const statLogs = document.getElementById('statLogs');
+            if (statLogs && !Number.isNaN(logEntries)) {
+                statLogs.textContent = logEntries;
+            }
+        }
+
+        updateIdleStatusIfStale();
         updatePlot();
+        setInterval(updatePlot, 100);
+        setInterval(updateIdleStatusIfStale, 100);
     </script>
 </body>
-</html>"""
+</html>
+
+"""
             
         @self.app.route('/video_feed')
         def video_feed():
@@ -411,58 +968,139 @@ class ArducamTracker:
             
 
     def detect_brown_box(self, frame):
-        """Enhanced brown box detection for Arducam"""
+        """Box detection with motion gating and clearly tunable parameters."""
         try:
-            # Convert to HSV color space
+            # ==========================
+            # TUNABLE PARAMETERS - COLOR
+            # ==========================
+            # OpenCV HSV ranges:
+            #   H: 0..179, S: 0..255, V: 0..255
+            COLOR_H_MIN = 0      # min hue (0 = red, 30 = yellow, 60 = green)
+            COLOR_H_MAX = 255     # max hue (up to olive / muted green)
+            COLOR_S_MIN = 0     # min saturation (increase to reject gray/skin)
+            COLOR_S_MAX = 255    # max saturation (decrease to reject vivid colors)
+            COLOR_V_MIN = 0     # min value (increase to ignore very dark areas)
+            COLOR_V_MAX = 255    # max value (decrease to ignore very bright glare)
+
+            # ============================
+            # TUNABLE PARAMETERS - MOTION
+            # ============================
+            # Background subtractor learning rate:
+            #   higher -> adapts faster, background updates quickly
+            #   lower  -> adapts slower, motion persists longer
+            MOTION_LEARNING_RATE = 0.9
+
+            # Threshold on bg subtractor output:
+            #   lower -> more pixels considered moving (noisier)
+            #   higher -> fewer pixels considered moving
+            MOTION_BINARY_THRESH = 15
+
+            # ==========================
+            # TUNABLE PARAMETERS - SHAPE
+            # ==========================
+            # Area in pixels. Set based on how big the box appears.
+            AREA_MIN = 20000      # min area for a contour to be considered
+            AREA_MAX = 500_000 # max area (probably never hit but kept as guard)
+
+            # Minimum width and height of bounding rectangle
+            WIDTH_MIN = 210
+            HEIGHT_MIN = 210
+
+            # Acceptable width / height ratio
+            ASPECT_MIN = 0.1
+            ASPECT_MAX = 6.0
+
+            # Solidity filter (area / convex_hull_area)
+            #   closer to 1 -> filled, compact shapes
+            SOLIDITY_MIN = 0.7
+
+            # Kernel size for morphology (noise cleaning)
+            MORPH_KERNEL_SIZE = 3
+
+            # =====================
+            #     PIPELINE
+            # =====================
+
+            # Convert to HSV
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            
-            # BROWN color detection in HSV
-            # Brown typically has low saturation and medium value
-            lower_brown = np.array([0, 50, 20])
-            upper_brown = np.array([20, 200, 200])
-            
-            # Alternative brown ranges
-            lower_brown2 = np.array([160, 50, 20])
-            upper_brown2 = np.array([180, 200, 200])
-            
-            # Create masks
-            mask1 = cv2.inRange(hsv, lower_brown, upper_brown)
-            mask2 = cv2.inRange(hsv, lower_brown2, upper_brown2)
-            brown_mask = mask1 | mask2
-            
-            # Noise reduction
-            kernel = np.ones((5,5), np.uint8)
-            brown_mask = cv2.morphologyEx(brown_mask, cv2.MORPH_CLOSE, kernel)
-            brown_mask = cv2.morphologyEx(brown_mask, cv2.MORPH_OPEN, kernel)
-            
+
+            # Color mask for muted cardboard like stuff
+            lower_cardboard = np.array(
+                [COLOR_H_MIN, COLOR_S_MIN, COLOR_V_MIN],
+                dtype=np.uint8
+            )
+            upper_cardboard = np.array(
+                [COLOR_H_MAX, COLOR_S_MAX, COLOR_V_MAX],
+                dtype=np.uint8
+            )
+            color_mask = cv2.inRange(hsv, lower_cardboard, upper_cardboard)
+
+            # Motion mask from background subtractor
+            motion_raw = self.bg_subtractor.apply(
+                frame, learningRate=MOTION_LEARNING_RATE
+            )
+            _, motion_mask = cv2.threshold(
+                motion_raw, MOTION_BINARY_THRESH, 255, cv2.THRESH_BINARY
+            )
+
+            # Only moving cardboard colored pixels
+            box_mask = cv2.bitwise_and(color_mask, motion_mask)
+
+            # Morphology to clean noise
+            kernel = np.ones((MORPH_KERNEL_SIZE, MORPH_KERNEL_SIZE), np.uint8)
+            box_mask = cv2.morphologyEx(box_mask, cv2.MORPH_CLOSE, kernel)
+            box_mask = cv2.morphologyEx(box_mask, cv2.MORPH_OPEN, kernel)
+
             # Find contours
-            contours, _ = cv2.findContours(brown_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            
-            if contours:
-                # Filter contours by area and shape
-                valid_contours = []
-                for contour in contours:
-                    area = cv2.contourArea(contour)
-                    # Adjust these values based on your box size
-                    if 20000 < area < 1000000:  # Larger range for high-res camera
-                        x, y, w, h = cv2.boundingRect(contour)
-                        aspect_ratio = w / h
-                        # Look for box-like shapes (aspect ratio near 1)
-                        if 0.5 < aspect_ratio < 2.0:
-                            valid_contours.append(contour)
-                
-                if valid_contours:
-                    # Use largest valid contour
-                    largest_contour = max(valid_contours, key=cv2.contourArea)
-                    x, y, w, h = cv2.boundingRect(largest_contour)
-                    center_x = x + w // 2
-                    center_y = y + h // 2
-                    return (center_x, center_y, w, h), frame, brown_mask
-                    
+            contours, _ = cv2.findContours(
+                box_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            )
+
+            if not contours:
+                return None, frame, box_mask
+
+            valid_contours = []
+            for contour in contours:
+                area = cv2.contourArea(contour)
+                if not (AREA_MIN <= area <= AREA_MAX):
+                    continue
+
+                x, y, w, h = cv2.boundingRect(contour)
+                if w < WIDTH_MIN or h < HEIGHT_MIN:
+                    continue
+
+                aspect_ratio = w / float(h)
+                if not (ASPECT_MIN <= aspect_ratio <= ASPECT_MAX):
+                    continue
+
+                # Solidity filter
+                hull = cv2.convexHull(contour)
+                hull_area = cv2.contourArea(hull)
+                if hull_area == 0:
+                    continue
+                solidity = float(area) / hull_area
+                if solidity < SOLIDITY_MIN:
+                    continue
+
+                valid_contours.append(contour)
+
+            if not valid_contours:
+                return None, frame, box_mask
+
+            largest_contour = max(valid_contours, key=cv2.contourArea)
+            x, y, w, h = cv2.boundingRect(largest_contour)
+            center_x = x + w // 2
+            center_y = y + h // 2
+
+            return (center_x, center_y, w, h), frame, box_mask
+
         except Exception as e:
             print(f"Detection error: {e}")
-            
-        return None, frame, None
+            return None, frame, None
+
+
+
+
 
     def create_test_frame(self):
         """Create test frame that simulates Arducam high resolution"""
@@ -494,8 +1132,11 @@ class ArducamTracker:
 
     def generate_frames(self):
         """Generate video frames with Arducam optimization"""
+        TAIL_SECONDS = 3.0  # how long the trail should live
+
         while True:
             try:
+                # --- acquire frame and detection ---
                 if self.test_mode:
                     frame, box_position = self.create_test_frame()
                     mask = None
@@ -506,83 +1147,100 @@ class ArducamTracker:
                         self.test_mode = True
                         continue
                     box_position, frame, mask = self.detect_brown_box(frame)
-                
-                # Calculate FPS
+
+                # FPS calculation
                 self.frame_count += 1
                 if self.frame_count % 30 == 0:
                     elapsed = time.time() - self.start_time
-                    self.fps = 30 / elapsed
+                    self.fps = 30 / elapsed if elapsed > 0 else 0.0
                     self.start_time = time.time()
-                
+
                 processed_frame = frame.copy()
-                
+                now = time.time()
+
+                # --- update trajectory only when we have a detection ---
                 if self.tracking_enabled and box_position:
                     center_x, center_y, w, h = box_position
                     self.current_position = (center_x, center_y)
-                    self.trajectory.append((center_x, center_y))
                     self.detection_count += 1
-                    
-                    # Draw detection
-                    cv2.rectangle(processed_frame, 
-                                (center_x - w//2, center_y - h//2),
-                                (center_x + w//2, center_y + h//2),
-                                (0, 255, 0), 3)
+
+                    # store (x, y, t)
+                    self.trajectory.append((center_x, center_y, now))
+
+                # drop old points so trail is at most TAIL_SECONDS long
+                cutoff = now - TAIL_SECONDS
+                while self.trajectory and self.trajectory[0][2] < cutoff:
+                    self.trajectory.popleft()
+
+                # --- draw trajectory regardless of whether this frame had a detection ---
+                points = list(self.trajectory)
+                if len(points) >= 2:
+                    for i in range(1, len(points)):
+                        x1, y1, t1 = points[i - 1]
+                        x2, y2, t2 = points[i]
+
+                        # newer segments brighter, older segments darker
+                        age = now - t2
+                        frac = max(0.0, min(1.0, 1.0 - age / TAIL_SECONDS))
+                        intensity = int(60 + 195 * frac)  # from 60 to 255
+                        color = (intensity, 0, 0)        # bright blue in BGR
+
+                        cv2.line(
+                            processed_frame,
+                            (int(x1), int(y1)),
+                            (int(x2), int(y2)),
+                            color,
+                            6,  # thickness
+                        )
+
+                # --- draw current detection box only on frames with detection ---
+                if self.tracking_enabled and box_position:
+                    center_x, center_y, w, h = box_position
+                    cv2.rectangle(
+                        processed_frame,
+                        (center_x - w // 2, center_y - h // 2),
+                        (center_x + w // 2, center_y + h // 2),
+                        (0, 255, 0),
+                        3,
+                    )
                     cv2.circle(processed_frame, (center_x, center_y), 8, (0, 0, 255), -1)
-                    
-                    # Draw trajectory
-                    for i in range(1, len(self.trajectory)):
-                        cv2.line(processed_frame, 
-                               self.trajectory[i-1], 
-                               self.trajectory[i], 
-                               (255, 0, 0), 3)
-                    
-                    # Add detection info
-                    mode_text = "TEST MODE" if self.test_mode else "ARDUCAM LIVE"
-                    cv2.putText(processed_frame, f'Mode: {mode_text}', 
-                              (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-                    cv2.putText(processed_frame, f'Position: ({center_x}, {center_y})', 
-                              (20, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                    cv2.putText(processed_frame, f'Size: {w}x{h}', 
-                              (20, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                    
-                    # Send to dashboard
-                    self.socketio.emit('detection_update', {
-                        'x': center_x,
-                        'y': center_y,
-                        'width': w,
-                        'height': h,
-                        'speed': 0,
-                        'direction': 0,
-                        'timestamp': time.time()
-                    })
-                
-                # Add FPS and status
-                status_color = (0, 255, 0) if not self.test_mode else (0, 255, 255)
-                cv2.putText(processed_frame, f'FPS: {self.fps:.1f}', 
-                          (20, processed_frame.shape[0] - 40), 
-                          cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-                cv2.putText(processed_frame, f'Status: {"LIVE" if not self.test_mode else "TEST MODE"}', 
-                          (20, processed_frame.shape[0] - 10), 
-                          cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
-                
-                # Send stats
+
+                    # emit detection only when there is one
+                    self.socketio.emit(
+                        "detection_update",
+                        {
+                            "x": center_x,
+                            "y": center_y,
+                            "width": w,
+                            "height": h,
+                            "speed": 0,
+                            "direction": 0,
+                            "timestamp": now,
+                        },
+                    )
+
+
+                # stats emitted every 10 frames as before
                 if self.frame_count % 10 == 0:
-                    self.socketio.emit('system_stats', self.get_system_stats())
-                
-                # Resize for streaming if too large
+                    self.socketio.emit("system_stats", self.get_system_stats())
+
+                # resize for streaming if needed
                 if processed_frame.shape[1] > 1280:
                     processed_frame = cv2.resize(processed_frame, (1280, 720))
-                
-                # Encode frame
-                ret, buffer = cv2.imencode('.jpg', processed_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+
+                # encode and yield frame
+                ret, buffer = cv2.imencode(".jpg", processed_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 frame_bytes = buffer.tobytes()
-                
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-                       
+
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
+                )
+
             except Exception as e:
                 print(f"Frame generation error: {e}")
                 time.sleep(0.1)
+
 
     def get_system_stats(self):
         return {
