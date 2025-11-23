@@ -11,7 +11,7 @@
             --bg-panel: #0b0d10;
             --bg-panel-alt: #111318;
             --border-soft: #1f2933;
-            --accent: #f97316;
+            --accent: #ffffff;
             --accent-soft: rgba(249, 115, 22, 0.2);
             --text-main: #f9fafb;
             --text-muted: #9ca3af;
@@ -34,13 +34,13 @@
         .container {
             max-width: 1320px;
             margin: 0 auto;
-            background: linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(3, 7, 18, 0.98));
+            background: linear-gradient(145deg, rgba(6, 9, 18, 0.9), rgba(3, 7, 18, 0.98));
             padding: 20px 24px 28px 24px;
             border-radius: 18px;
             border: 1px solid rgba(31, 41, 55, 0.9);
             box-shadow:
                 0 24px 80px rgba(0, 0, 0, 0.9),
-                0 0 0 1px rgba(15, 23, 42, 0.9);
+                0 0 0 1px rgba(12, 17, 28, 0.9);
             backdrop-filter: blur(12px);
         }
 
@@ -162,6 +162,8 @@
             align-items: flex-start;
         }
 
+
+
         #videoFeed {
             border-radius: 10px;
             border: 1px solid rgba(75, 85, 99, 0.9);
@@ -173,13 +175,15 @@
             display: flex;
             flex-direction: column;
             gap: 6px;
-            height: 100%;
+            height: 480px;      
         }
+
+
 
         .logs {
             flex: 1;
-            min-height: 160px;
-            max-height: 260px;
+            min-height: 0;
+            max-height: 100%;     
             overflow-y: auto;
             border-radius: 10px;
             border: 1px solid rgba(31, 41, 55, 0.9);
@@ -189,6 +193,9 @@
             font-size: 11px;
             color: var(--text-main);
         }
+
+
+
 
         .logs::-webkit-scrollbar {
             width: 6px;
@@ -406,6 +413,77 @@
                 height: auto;
             }
         }
+
+                .motion-widget {
+            border-radius: 10px;
+            border: 1px solid rgba(31, 41, 55, 0.9);
+            background: rgba(3, 7, 18, 0.96);
+            padding: 8px 8px 10px 8px;
+            margin-top: 4px;
+        }
+
+        .motion-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--text-muted);
+        }
+
+        #motionVectorPlot {
+            width: 100%;
+            height: 200px;
+        }
+
+        .motion-readout {
+            margin-top: 4px;
+            font-size: 10px;
+            font-family: ui-monospace, SFMonoRegular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            color: var(--text-muted);
+        }
+
+        .motion-readout span {
+            color: var(--accent);
+        }
+
+                .bottom-row {
+            display: flex;
+            gap: 16px;
+            align-items: stretch;
+        }
+
+        .bottom-row .panel {
+            flex: 1;
+        }
+
+        .regression-widget {
+            border-radius: 10px;
+            border: 1px solid rgba(31, 41, 55, 0.9);
+            background: rgba(3, 7, 18, 0.96);
+            padding: 8px 8px 10px 8px;
+            margin-top: 8px;
+        }
+
+        .regression-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--text-muted);
+        }
+
+        #regressionPlot {
+            width: 100%;
+            height: 180px;
+        }
+
+
     </style>
 </head>
 <body>
@@ -418,7 +496,7 @@
             <div class="header-right">
                 <div class="status-pill">
                     <div class="status-indicator" id="globalStatusIndicator"></div>
-                    <span id="globalStatusText">Tracking Online</span>
+                    <span id="globalStatusText">Vision Online</span>
                 </div>
                 <div style="margin-top: 6px;">Team 01</div>
             </div>
@@ -435,8 +513,8 @@
                         <img id="videoFeed" src="/video_feed" width="640" height="480" alt="Video feed">
                         <div class="log-panel">
                             <div class="panel-header" style="margin-bottom: 4px;">
-                                <div class="panel-title"><span>Log</span> / Detection Events</div>
-                                <div class="panel-tag" id="logCountTag">0 entries</div>
+                                <div class="panel-title"><span>Log</span> / Events</div>
+                                <div class="panel-tag" id="logCountTag">0 logs</div>
                             </div>
                             <div class="logs" id="logContainer">
                                 <div id="logs"></div>
@@ -445,7 +523,7 @@
                     </div>
                 </div>
 
-                <div class="panel">
+                <!-- <div class="panel">
                     <div class="panel-header">
                         <div class="panel-title"><span>Trajectory</span> / Position History</div>
                         <div class="panel-tag">Pixels Space</div>
@@ -457,64 +535,95 @@
                         </div>
                         <div id="trajectoryPlot"></div>
                     </div>
+                </div> -->
+                                <div class="bottom-row">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title"><span>Control</span> / Session</div>
+                            <div class="panel-tag">Command</div>
+                        </div>
+                        <div class="controls-row">
+                            <div class="controls">
+                                <button class="btn-start" onclick="toggleTracking(true)">Start</button>
+                                <button class="btn-stop" onclick="toggleTracking(false)">Stop</button>
+                                <button class="btn-clear" onclick="clearLogs()">Clear Log</button>
+                            </div>
+                        </div>
+                        <div id="status" class="status status-idle">
+                            <div class="status-header">
+                                <span>Status</span>
+                                <span id="statusModeLabel">Idle</span>
+                            </div>
+                            <div class="status-line" id="statusLine1">Waiting for box detection.</div>
+                            <div class="status-line" id="statusLine2">No active target.</div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title"><span>System</span> / Telemetry</div>
+                            <div class="panel-tag" id="cameraModeTag">Arducam Live</div>
+                        </div>
+                        <div class="stat-grid">
+                            <div class="stat-card">
+                                <div class="stat-label">Log Count</div>
+                                <div class="stat-value" id="statLogs">0</div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-label">Frame Rate</div>
+                                <div class="stat-value" id="statFPS">0.0 fps</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Trajectory Points</div>
+                                <div class="stat-value" id="statTrajectory">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Cam Reso</div>
+                                <div class="stat-value" id="statResolution">1280x720</div>
+                            </div>
+                            <!-- <div class="stat-card">
+                                <div class="stat-label">Detections</div>
+                                <div class="stat-value accent" id="statDetections">0</div>
+                            </div> -->
+                            <!-- <div class="stat-card">
+                                <div class="stat-label">Tracking Status</div>
+                                <div class="stat-value success" id="statTracking">Active</div>
+                            </div> -->
+                            
+                        </div>
+                    </div>
                 </div>
             </section>
 
             <section class="right-column">
-                <div class="panel">
+                    <div class="panel">
                     <div class="panel-header">
-                        <div class="panel-title"><span>System</span> / Telemetry</div>
-                        <div class="panel-tag" id="cameraModeTag">Arducam Live</div>
+                        <div class="panel-title"><span>Motion</span> / Trajectory</div>
+                        <div class="panel-tag">Vector Field</div>
                     </div>
-                    <div class="stat-grid">
-                        <div class="stat-card">
-                            <div class="stat-label">Detections</div>
-                            <div class="stat-value accent" id="statDetections">0</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Frame Rate</div>
-                            <div class="stat-value" id="statFPS">0.0 fps</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Trajectory Points</div>
-                            <div class="stat-value" id="statTrajectory">0</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Log Entries</div>
-                            <div class="stat-value" id="statLogs">0</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Tracking Status</div>
-                            <div class="stat-value success" id="statTracking">Active</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-label">Resolution</div>
-                            <div class="stat-value" id="statResolution">1280 x 720</div>
-                        </div>
-                    </div>
-                </div>
 
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title"><span>Control</span> / Session</div>
-                        <div class="panel-tag">Command Link</div>
-                    </div>
-                    <div class="controls-row">
-                        <div class="controls">
-                            <button class="btn-start" onclick="toggleTracking(true)">Start</button>
-                            <button class="btn-stop" onclick="toggleTracking(false)">Stop</button>
-                            <button class="btn-clear" onclick="clearLogs()">Clear Log</button>
+                    <div class="motion-widget">
+                        <div class="motion-meta">
+                            <div>Desired accel / velo</div>
+                            <div>Goal: frame center</div>
+                        </div>
+                        <div id="motionVectorPlot"></div>
+                        <div class="motion-readout">
+                            <div id="motionVelocityText">v_des: vx=0.0, vy=0.0 px/s</div>
+                            <div id="motionAccelText">a_des: ax=0.0, ay=0.0 px/s²</div>
                         </div>
                     </div>
-                    <div id="status" class="status status-idle">
-                        <div class="status-header">
-                            <span>Status</span>
-                            <span id="statusModeLabel">Idle</span>
+
+                    <div class="regression-widget">
+                        <div class="regression-meta">
+                            <div>Traj fit</div>
+                            <div>LinReg</div>
                         </div>
-                        <div class="status-line" id="statusLine1">Waiting for box detection.</div>
-                        <div class="status-line" id="statusLine2">No active target.</div>
+                        <div id="regressionPlot"></div>
                     </div>
                 </div>
+                
             </section>
         </main>
     </div>
@@ -525,11 +634,19 @@
         let lastUpdate = Date.now();
         let logEntries = 0;
         let trajectoryPoints = [];
-        const TRAJECTORY_WINDOW_MS = 3000;
+        const TRAJECTORY_WINDOW_MS = 500;
         let lastDetectionTime = 0;
-        const DETECTION_TIMEOUT_MS = 500;
+        const DETECTION_TIMEOUT_MS = 50;
         let trajMaxX = 1920;  
         let trajMaxY = 1080;
+        let desiredMotion = {
+            vx: 0,
+            vy: 0,
+            ax: 0,
+            ay: 0,
+            hasData: false
+        };
+
 
         socket.on('detection_update', function(data) {
             updateStatus(data);
@@ -554,9 +671,22 @@
             socket.emit('toggle_tracking', { enabled: enabled });
         }
 
-        function clearLogs() {
-            socket.emit('clear_logs');
+                function clearLogs() {
+            const logsDiv = document.getElementById('logs');
+            const logContainer = document.getElementById('logContainer');
+
+            if (logsDiv) {
+                logsDiv.innerHTML = '';
+            }
+
+            logEntries = 0;
+            updateLogCount();
+
+            if (logContainer) {
+                logContainer.scrollTop = 0;
+            }
         }
+
 
         function updateStatus(data) {
             const statusDiv = document.getElementById('status');
@@ -571,19 +701,19 @@
 
             const x = Math.round(data.x);
             const y = Math.round(data.y);
-            const speed = data.speed ? data.speed.toFixed(1) : '0.0';
-            const direction = data.direction ? data.direction.toFixed(1) + ' deg' : 'N/A';
+            // const speed = data.speed ? data.speed.toFixed(1) : '0.0';
+            // const direction = data.direction ? data.direction.toFixed(1) + ' deg' : 'N/A';
 
             statusDiv.classList.remove('status-idle');
             statusDiv.classList.add('status-detected');
             statusModeLabel.textContent = 'Target Locked';
 
             statusLine1.textContent = `[COORD] x=${x}, y=${y}  size=${data.width}x${data.height}`;
-            statusLine2.textContent = `[MOTION] speed=${speed} px/frame  heading=${direction}`;
+            statusLine2.textContent = `Tracking target!`;
 
             globalIndicator.style.background = '#22c55e';
             globalIndicator.style.boxShadow = '0 0 10px rgba(34, 197, 94, 0.9)';
-            globalText.textContent = 'Tracking Online';
+            globalText.textContent = 'Vision Online';
         }
 
         function updateIdleStatusIfStale() {
@@ -602,10 +732,6 @@
 
                 statusLine1.textContent = 'Waiting for box detection.';
                 statusLine2.textContent = 'No active target.';
-
-                globalIndicator.style.background = '#9ca3af';
-                globalIndicator.style.boxShadow = '0 0 4px rgba(156, 163, 175, 0.7)';
-                globalText.textContent = 'No Target';
             }
         }
 
@@ -626,98 +752,419 @@
 
             updatePlot();
         }
+        
 
 
-    function updatePlot() {
-        const plotEl = document.getElementById('trajectoryPlot');
-        if (!plotEl) return;
+        function updatePlot() {
+            const plotEl = document.getElementById('trajectoryPlot');
+            if (!plotEl) return;
 
-        const now = Date.now();
+            const now = Date.now();
 
-        // drop old points
-        trajectoryPoints = trajectoryPoints.filter(
-            p => now - p.t <= TRAJECTORY_WINDOW_MS
-        );
+            // drop old points
+            trajectoryPoints = trajectoryPoints.filter(
+                p => now - p.t <= TRAJECTORY_WINDOW_MS
+            );
 
-        const layoutBase = {
-            margin: { l: 40, r: 10, t: 4, b: 30 },
-            xaxis: {
-                title: { text: 'X (px)', font: { size: 10 } },
-                range: [0, trajMaxX],
-                gridcolor: '#1f2933',
-                zeroline: false
-            },
-            yaxis: {
-                title: { text: 'Y (px)', font: { size: 10 } },
-                range: [trajMaxY, 0],
-                gridcolor: '#1f2933',
-                zeroline: false,
-                scaleanchor: 'x'
-            },
-            showlegend: false,
-            paper_bgcolor: 'rgba(0,0,0,0)',
-            plot_bgcolor: 'rgba(0,0,0,0)',
-            font: { color: '#f9fafb', size: 10 }
-        };
+            const layoutBase = {
+                margin: { l: 40, r: 10, t: 4, b: 30 },
+                xaxis: {
+                    title: { text: 'X (px)', font: { size: 10 } },
+                    range: [0, trajMaxX],
+                    gridcolor: '#1f2933',
+                    zeroline: false
+                },
+                yaxis: {
+                    title: { text: 'Y (px)', font: { size: 10 } },
+                    range: [trajMaxY, 0],
+                    gridcolor: '#1f2933',
+                    zeroline: false,
+                    scaleanchor: 'x'
+                },
+                showlegend: false,
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#f9fafb', size: 10 }
+            };
 
-        if (trajectoryPoints.length === 0) {
+            if (trajectoryPoints.length === 0) {
+                Plotly.react(
+                    'trajectoryPlot',
+                    [],
+                    layoutBase,
+                    { displayModeBar: false, staticPlot: true }  // no zoom or drag
+                );
+                return;
+            }
+
+            const xs = trajectoryPoints.map(p => p.x);
+            const ys = trajectoryPoints.map(p => p.y);
+            const opacities = trajectoryPoints.map(p => {
+                const age = now - p.t;
+                const alpha = Math.max(0, Math.min(1, 1 - age / TRAJECTORY_WINDOW_MS));
+                return alpha;
+            });
+
+            const trace = {
+                x: xs,
+                y: ys,
+                mode: 'lines+markers',
+                type: 'scatter',
+                line: {
+                    width: 5,
+                    shape: 'spline'
+                },
+                marker: {
+                    size: 9,
+                    opacity: opacities
+                }
+            };
+
             Plotly.react(
                 'trajectoryPlot',
-                [],
+                [trace],
                 layoutBase,
-                { displayModeBar: false, staticPlot: true }  // no zoom or drag
+                { displayModeBar: false, staticPlot: true }
             );
-            return;
         }
 
-        const xs = trajectoryPoints.map(p => p.x);
-        const ys = trajectoryPoints.map(p => p.y);
-        const opacities = trajectoryPoints.map(p => {
-            const age = now - p.t;
-            const alpha = Math.max(0, Math.min(1, 1 - age / TRAJECTORY_WINDOW_MS));
-            return alpha;
-        });
-
-        const trace = {
-            x: xs,
-            y: ys,
-            mode: 'lines+markers',
-            type: 'scatter',
-            line: {
-                width: 5,
-                shape: 'spline'
-            },
-            marker: {
-                size: 9,
-                opacity: opacities
+        function computeDesiredMotion() {
+            // need at least two points and valid resolution
+            if (trajectoryPoints.length < 2 || trajMaxX <= 0 || trajMaxY <= 0) {
+                desiredMotion = {
+                    vx: 0,
+                    vy: 0,
+                    ax: 0,
+                    ay: 0,
+                    hasData: false
+                };
+                return desiredMotion;
             }
-        };
 
-        Plotly.react(
-            'trajectoryPlot',
-            [trace],
-            layoutBase,
-            { displayModeBar: false, staticPlot: true }
-        );
-    }
+            const n = trajectoryPoints.length;
+            const pLast = trajectoryPoints[n - 1];
+            const pPrev = trajectoryPoints[n - 2];
+            const pFirst = trajectoryPoints[0];
+
+            const dt = (pLast.t - pPrev.t) / 1000.0; // seconds
+            const cx = trajMaxX / 2;
+            const cy = trajMaxY / 2;
+
+            // image-plane error: from frame center to current detection
+            const ex = pLast.x - cx;
+            const ey = pLast.y - cy;
+
+            // approximate measured velocity in image plane (object)
+            let vx_meas = 0;
+            let vy_meas = 0;
+            if (dt > 0) {
+                vx_meas = (pLast.x - pPrev.x) / dt;
+                vy_meas = (pLast.y - pPrev.y) / dt;
+            }
+
+            // linear regression of trajectory in image plane
+            const fit = computeLinearFit(trajectoryPoints);
+            if (!fit) {
+                desiredMotion = {
+                    vx: 0,
+                    vy: 0,
+                    ax: 0,
+                    ay: 0,
+                    hasData: false
+                };
+                return desiredMotion;
+            }
+
+            // unit direction along line of best fit
+            let dirX;
+            let dirY;
+            if (fit.slope === null) {
+                // vertical line
+                dirX = 0;
+                dirY = 1;
+            } else {
+                dirX = 1;
+                dirY = fit.slope;
+                const mag = Math.hypot(dirX, dirY);
+                if (mag > 0) {
+                    dirX /= mag;
+                    dirY /= mag;
+                }
+            }
+
+            // choose sign so that direction matches overall motion (first to last)
+            const dxFL = pLast.x - pFirst.x;
+            const dyFL = pLast.y - pFirst.y;
+            const sign = (dxFL * dirX + dyFL * dirY) >= 0 ? 1 : -1;
+            dirX *= sign;
+            dirY *= sign;
+
+            // signed distance from frame center to last point along the fitted line
+            const proj = ex * dirX + ey * dirY;
+
+            // desired velocity - move opposite along the trajectory so object tends toward center
+            const k_v = 1.0;
+            const vx_des = -k_v * proj * dirX;
+            const vy_des = -k_v * proj * dirY;
+
+            // desired acceleration chases the desired velocity
+            const k_a = 0.5;
+            const ax_des = k_a * (vx_des - vx_meas);
+            const ay_des = k_a * (vy_des - vy_meas);
+
+            desiredMotion = {
+                vx: vx_des,
+                vy: vy_des,
+                ax: ax_des,
+                ay: ay_des,
+                hasData: true
+            };
+
+            return desiredMotion;
+        }
+
+
+
+        function updateMotionWidget() {
+            const plotId = 'motionVectorPlot';
+            const plotEl = document.getElementById(plotId);
+            if (!plotEl) {
+                return;
+            }
+
+            const layout = {
+                margin: { l: 30, r: 10, t: 10, b: 30 },
+                xaxis: {
+                    title: { text: 'vx / ax (norm)', font: { size: 9 } },
+                    range: [-1, 1],
+                    gridcolor: '#1f2933',
+                    zeroline: true
+                },
+                yaxis: {
+                    title: { text: 'vy / ay (norm)', font: { size: 9 } },
+                    range: [-1, 1],
+                    gridcolor: '#1f2933',
+                    zeroline: true,
+                    scaleanchor: 'x'
+                },
+                showlegend: true,
+                legend: {
+                    orientation: 'h',
+                    y: -0.2,
+                    x: 0.0
+                },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#f9fafb', size: 9 }
+            };
+
+            const motion = computeDesiredMotion();
+
+            const velTextEl = document.getElementById('motionVelocityText');
+            const accTextEl = document.getElementById('motionAccelText');
+
+            if (!motion.hasData) {
+                Plotly.react(plotId, [], layout, { displayModeBar: false, staticPlot: true });
+                if (velTextEl) {
+                    velTextEl.textContent = 'v_des: vx=0.0, vy=0.0 px/s';
+                }
+                if (accTextEl) {
+                    accTextEl.textContent = 'a_des: ax=0.0, ay=0.0 px/s²';
+                }
+                return;
+            }
+
+            // normalize vectors so they fit nicely in [-1, 1] and flip y for display
+            const vMag = Math.hypot(motion.vx, motion.vy);
+            const aMag = Math.hypot(motion.ax, motion.ay);
+            const maxMag = Math.max(vMag, aMag, 1e-6);
+            const scale = 0.8 / maxMag;
+
+            function normForPlot(x, y) {
+                return {
+                    x: x * scale,
+                    y: -y * scale   // invert y so "up" is up in the widget
+                };
+            }
+
+            const vNorm = normForPlot(motion.vx, motion.vy);
+            const aNorm = normForPlot(motion.ax, motion.ay);
+
+            const traces = [
+                {
+                    x: [0, vNorm.x],
+                    y: [0, vNorm.y],
+                    mode: 'lines+markers',
+                    type: 'scatter',
+                    name: 'v_des',
+                    line: { width: 3 },
+                    marker: { size: 6 }
+                },
+                {
+                    x: [0, aNorm.x],
+                    y: [0, aNorm.y],
+                    mode: 'lines+markers',
+                    type: 'scatter',
+                    name: 'a_des',
+                    line: { width: 3, dash: 'dot' },
+                    marker: { size: 6 }
+                }
+            ];
+
+            Plotly.react(plotId, traces, layout, { displayModeBar: false, staticPlot: true });
+
+            if (velTextEl) {
+                velTextEl.textContent =
+                    `v_des: vx=${motion.vx.toFixed(1)}, vy=${motion.vy.toFixed(1)} px/s`;
+            }
+            if (accTextEl) {
+                accTextEl.textContent =
+                    `a_des: ax=${motion.ax.toFixed(1)}, ay=${motion.ay.toFixed(1)} px/s²`;
+            }
+        }
+
+                function updateRegressionPlot() {
+            const plotId = 'regressionPlot';
+            const plotEl = document.getElementById(plotId);
+            if (!plotEl) {
+                return;
+            }
+
+            const now = Date.now();
+            // keep the same time window as trajectory
+            trajectoryPoints = trajectoryPoints.filter(
+                p => now - p.t <= TRAJECTORY_WINDOW_MS
+            );
+
+            const layout = {
+                margin: { l: 40, r: 10, t: 10, b: 30 },
+                xaxis: {
+                    title: { text: 'X (px)', font: { size: 9 } },
+                    range: [0, trajMaxX],
+                    gridcolor: '#1f2933',
+                    zeroline: false
+                },
+                yaxis: {
+                    title: { text: 'Y (px)', font: { size: 9 } },
+                    range: [trajMaxY, 0],
+                    gridcolor: '#1f2933',
+                    zeroline: false,
+                    scaleanchor: 'x'
+                },
+                showlegend: true,
+                legend: {
+                    orientation: 'h',
+                    y: -0.2,
+                    x: 0.0
+                },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#f9fafb', size: 9 }
+            };
+
+            if (trajectoryPoints.length < 2) {
+                Plotly.react(plotId, [], layout, { displayModeBar: false, staticPlot: true });
+                return;
+            }
+
+            const xs = trajectoryPoints.map(p => p.x);
+            const ys = trajectoryPoints.map(p => p.y);
+
+            const scatterTrace = {
+                x: xs,
+                y: ys,
+                mode: 'markers',
+                type: 'scatter',
+                name: 'trajectory',
+                marker: { size: 6 }
+            };
+
+            const fit = computeLinearFit(trajectoryPoints);
+            let lineTrace = null;
+
+            if (fit) {
+                if (fit.slope === null) {
+                    // vertical line at meanX
+                    const x0 = fit.meanX;
+                    const x1 = fit.meanX;
+                    lineTrace = {
+                        x: [x0, x1],
+                        y: [0, trajMaxY],
+                        mode: 'lines',
+                        type: 'scatter',
+                        name: 'line of best fit',
+                        line: { width: 2, dash: 'dot' }
+                    };
+                } else {
+                    const x0 = 0;
+                    const x1 = trajMaxX;
+                    const y0 = fit.slope * x0 + fit.intercept;
+                    const y1 = fit.slope * x1 + fit.intercept;
+                    lineTrace = {
+                        x: [x0, x1],
+                        y: [y0, y1],
+                        mode: 'lines',
+                        type: 'scatter',
+                        name: 'line of best fit',
+                        line: { width: 2, dash: 'dot' }
+                    };
+                }
+            }
+
+            const traces = lineTrace ? [scatterTrace, lineTrace] : [scatterTrace];
+
+            Plotly.react(plotId, traces, layout, { displayModeBar: false, staticPlot: true });
+        }
+
+
+        function computeLinearFit(points) {
+            const n = points.length;
+            if (n < 2) {
+                return null;
+            }
+
+            let sumX = 0;
+            let sumY = 0;
+            for (const p of points) {
+                sumX += p.x;
+                sumY += p.y;
+            }
+            const meanX = sumX / n;
+            const meanY = sumY / n;
+
+            let num = 0;
+            let den = 0;
+            for (const p of points) {
+                const dx = p.x - meanX;
+                const dy = p.y - meanY;
+                num += dx * dy;
+                den += dx * dx;
+            }
+
+            // null slope means vertical line x = meanX
+            const slope = den === 0 ? null : num / den;
+            const intercept = slope === null ? null : (meanY - slope * meanX);
+
+            return { slope, intercept, meanX, meanY };
+        }
 
 
 
 
         function updateStats(data) {
-            const detEl = document.getElementById('statDetections');
+            // const detEl = document.getElementById('statDetections');
             const fpsEl = document.getElementById('statFPS');
             const trajEl = document.getElementById('statTrajectory');
             const logsEl = document.getElementById('statLogs');
-            const trackEl = document.getElementById('statTracking');
+            // const trackEl = document.getElementById('statTracking');
             const resEl = document.getElementById('statResolution');
             const modeTag = document.getElementById('cameraModeTag');
             const globalIndicator = document.getElementById('globalStatusIndicator');
             const globalText = document.getElementById('globalStatusText');
 
-            detEl.textContent = data.detection_count;
+            // detEl.textContent = data.detection_count;
             fpsEl.textContent = `${data.fps.toFixed(1)} fps`;
-            trajEl.textContent = data.trajectory_length;
+            trajEl.textContent = trajectoryPoints.length;
 
             // use frontend counter for logs
             logsEl.textContent = logEntries;
@@ -740,21 +1187,21 @@
                 trajMaxY = 720;
             }
 
-            if (data.tracking_enabled) {
-                trackEl.textContent = 'Active';
-                trackEl.classList.remove('danger');
-                trackEl.classList.add('success');
-                globalIndicator.style.background = '#22c55e';
-                globalIndicator.style.boxShadow = '0 0 10px rgba(34, 197, 94, 0.9)';
-                globalText.textContent = 'Tracking Online';
-            } else {
-                trackEl.textContent = 'Paused';
-                trackEl.classList.remove('success');
-                trackEl.classList.add('danger');
-                globalIndicator.style.background = '#ef4444';
-                globalIndicator.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.9)';
-                globalText.textContent = 'Tracking Paused';
-            }
+            // if (data.tracking_enabled) {
+            //     trackEl.textContent = 'Active';
+            //     trackEl.classList.remove('danger');
+            //     trackEl.classList.add('success');
+            //     globalIndicator.style.background = '#22c55e';
+            //     globalIndicator.style.boxShadow = '0 0 10px rgba(34, 197, 94, 0.9)';
+            //     globalText.textContent = 'Tracking Online';
+            // } else {
+            //     trackEl.textContent = 'Paused';
+            //     trackEl.classList.remove('success');
+            //     trackEl.classList.add('danger');
+            //     globalIndicator.style.background = '#ef4444';
+            //     globalIndicator.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.9)';
+            //     globalText.textContent = 'Tracking Paused';
+            // }
 
             modeTag.textContent = data.test_mode ? 'Test Mode' : 'Arducam Live';
 }
@@ -792,7 +1239,7 @@
 
         function updateLogCount() {
             const tag = document.getElementById('logCountTag');
-            tag.textContent = `${logEntries} entries`;
+            tag.textContent = `${logEntries} logs`;
             const statLogs = document.getElementById('statLogs');
             if (statLogs && !Number.isNaN(logEntries)) {
                 statLogs.textContent = logEntries;
@@ -801,7 +1248,14 @@
 
         updateIdleStatusIfStale();
         updatePlot();
+        updateMotionWidget();
+        updateRegressionPlot();
+
         setInterval(updatePlot, 100);
+        setInterval(updateMotionWidget, 100);
+        setInterval(updateRegressionPlot, 100);
+        setInterval(updateIdleStatusIfStale, 100);
+
     </script>
 </body>
 </html>
