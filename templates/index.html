@@ -1,496 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>WALL-E</title>
+    <title>BALL-E</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-main: #050608;
-            --bg-panel: #0b0d10;
-            --bg-panel-alt: #111318;
-            --border-soft: #1f2933;
-            --accent: #ffffff;
-            --accent-soft: rgba(249, 115, 22, 0.2);
-            --text-main: #f9fafb;
-            --text-muted: #9ca3af;
-            --danger: #ef4444;
-            --success: #22c55e;
-        }
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            margin: 0;
-            padding: 24px;
-            background: radial-gradient(circle at top, #111827 0, #02040a 45%, #000000 100%);
-            color: var(--text-main);
-        }
-
-        .container {
-            max-width: 1320px;
-            margin: 0 auto;
-            background: linear-gradient(145deg, rgba(6, 9, 18, 0.9), rgba(3, 7, 18, 0.98));
-            padding: 20px 24px 28px 24px;
-            border-radius: 18px;
-            border: 1px solid rgba(31, 41, 55, 0.9);
-            box-shadow:
-                0 24px 80px rgba(0, 0, 0, 0.9),
-                0 0 0 1px rgba(12, 17, 28, 0.9);
-            backdrop-filter: blur(12px);
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-bottom: 24px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid rgba(55, 65, 81, 0.7);
-        }
-
-        .header-left h1 {
-            font-size: 24px;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            margin: 0 0 4px 0;
-            color: var(--text-main);
-        }
-
-        .header-left .subline {
-            font-size: 12px;
-            letter-spacing: 0.24em;
-            text-transform: uppercase;
-            color: var(--text-muted);
-        }
-
-        .header-right {
-            text-align: right;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.18em;
-            color: var(--text-muted);
-        }
-
-        .status-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 4px 10px;
-            border-radius: 999px;
-            background: rgba(15, 23, 42, 0.9);
-            border: 1px solid rgba(75, 85, 99, 0.8);
-            font-size: 11px;
-        }
-
-        .status-indicator {
-            width: 7px;
-            height: 7px;
-            border-radius: 999px;
-            background: var(--success);
-            box-shadow: 0 0 10px rgba(34, 197, 94, 0.9);
-        }
-
-        .dashboard {
-            display: grid;
-            grid-template-columns: 2.2fr 1.2fr;
-            gap: 18px;
-        }
-
-        .left-column,
-        .right-column {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .panel {
-            background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.9), rgba(15, 15, 20, 0.98));
-            border-radius: 14px;
-            border: 1px solid rgba(31, 41, 55, 0.9);
-            padding: 14px 14px 16px 14px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .panel::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: radial-gradient(circle at top left, rgba(249, 115, 22, 0.08), transparent 55%);
-            opacity: 0.9;
-            pointer-events: none;
-        }
-
-        .panel-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .panel-title {
-            font-size: 12px;
-            letter-spacing: 0.16em;
-            text-transform: uppercase;
-            color: var(--text-muted);
-        }
-
-        .panel-title span {
-            color: var(--accent);
-        }
-
-        .panel-tag {
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.16em;
-            color: var(--text-muted);
-            background: rgba(17, 24, 39, 0.9);
-            padding: 3px 8px;
-            border-radius: 999px;
-            border: 1px solid rgba(55, 65, 81, 0.9);
-        }
-
-        .video-layout {
-            display: grid;
-            grid-template-columns: auto minmax(260px, 1fr);
-            gap: 12px;
-            align-items: flex-start;
-        }
-
-
-
-        #videoFeed {
-            border-radius: 10px;
-            border: 1px solid rgba(75, 85, 99, 0.9);
-            background: #000;
-            display: block;
-        }
-
-        .log-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            height: 480px;      
-        }
-
-
-
-        .logs {
-            flex: 1;
-            min-height: 0;
-            max-height: 100%;     
-            overflow-y: auto;
-            border-radius: 10px;
-            border: 1px solid rgba(31, 41, 55, 0.9);
-            background: rgba(3, 7, 18, 0.96);
-            padding: 8px 10px;
-            font-family: ui-monospace, SFMonoRegular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-            font-size: 11px;
-            color: var(--text-main);
-        }
-
-
-
-
-        .logs::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .logs::-webkit-scrollbar-track {
-            background: rgba(15, 23, 42, 0.9);
-        }
-
-        .logs::-webkit-scrollbar-thumb {
-            background: rgba(75, 85, 99, 0.9);
-            border-radius: 999px;
-        }
-
-        .log-entry {
-            display: grid;
-            grid-template-columns: 90px 1fr;
-            column-gap: 8px;
-            row-gap: 2px;
-            padding: 4px 0;
-            border-bottom: 1px solid rgba(30, 41, 59, 0.6);
-        }
-
-        .log-entry:last-child {
-            border-bottom: none;
-        }
-
-        .log-timestamp {
-            color: var(--accent);
-            text-align: right;
-            white-space: nowrap;
-        }
-
-        .log-content {
-            color: var(--text-muted);
-        }
-
-        .stat-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 8px;
-        }
-
-        .stat-card {
-            background: rgba(3, 7, 18, 0.96);
-            border-radius: 10px;
-            border: 1px solid rgba(31, 41, 55, 0.9);
-            padding: 8px 10px;
-            font-size: 11px;
-        }
-
-        .stat-label {
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.14em;
-            margin-bottom: 4px;
-        }
-
-        .stat-value {
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--text-main);
-        }
-
-        .stat-value.accent {
-            color: var(--accent);
-        }
-
-        .stat-value.success {
-            color: var(--success);
-        }
-
-        .stat-value.danger {
-            color: var(--danger);
-        }
-
-        .controls-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
-        .controls {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
-        button {
-            padding: 7px 14px;
-            border-radius: 999px;
-            border: 1px solid rgba(75, 85, 99, 0.9);
-            background: linear-gradient(135deg, #020617, #020617);
-            color: var(--text-main);
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.14em;
-            cursor: pointer;
-            outline: none;
-            position: relative;
-            overflow: hidden;
-        }
-
-        button::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(135deg, rgba(249, 115, 22, 0.25), transparent);
-            opacity: 0;
-            transition: opacity 120ms ease;
-        }
-
-        button:hover::before {
-            opacity: 1;
-        }
-
-        .btn-start {
-            border-color: rgba(34, 197, 94, 0.8);
-        }
-
-        .btn-stop {
-            border-color: rgba(248, 113, 113, 0.9);
-        }
-
-        .btn-clear {
-            border-color: rgba(107, 114, 128, 0.9);
-        }
-
-        .status {
-            padding: 8px 10px;
-            border-radius: 10px;
-            border: 1px solid rgba(31, 41, 55, 0.9);
-            font-size: 11px;
-            background: rgba(3, 7, 18, 0.96);
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .status-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.16em;
-            color: var(--text-muted);
-        }
-
-        .status-line {
-            font-family: ui-monospace, SFMonoRegular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-            font-size: 11px;
-            color: var(--text-main);
-        }
-
-        .status-detected {
-            border-color: rgba(34, 197, 94, 0.8);
-            box-shadow: 0 0 24px rgba(34, 197, 94, 0.28);
-        }
-
-        .status-idle {
-            border-color: rgba(75, 85, 99, 0.9);
-        }
-
-        #trajectoryPlot {
-            width: 100%;
-            height: 220px;
-        }
-
-        .trajectory-wrapper {
-            border-radius: 10px;
-            border: 1px solid rgba(31, 41, 55, 0.9);
-            background: rgba(3, 7, 18, 0.96);
-            padding: 6px;
-        }
-
-        .trajectory-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 4px;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.14em;
-            color: var(--text-muted);
-        }
-
-        .trajectory-meta span {
-            color: var(--accent);
-        }
-
-        @media (max-width: 1024px) {
-            .dashboard {
-                grid-template-columns: 1fr;
-            }
-            .video-layout {
-                grid-template-columns: 1fr;
-            }
-            .logs {
-                max-height: 200px;
-            }
-        }
-
-        @media (max-width: 640px) {
-            body {
-                padding: 12px;
-            }
-            .container {
-                padding: 14px;
-            }
-            #videoFeed {
-                width: 100%;
-                height: auto;
-            }
-        }
-
-                .motion-widget {
-            border-radius: 10px;
-            border: 1px solid rgba(31, 41, 55, 0.9);
-            background: rgba(3, 7, 18, 0.96);
-            padding: 8px 8px 10px 8px;
-            margin-top: 4px;
-        }
-
-        .motion-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 4px;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.14em;
-            color: var(--text-muted);
-        }
-
-        #motionVectorPlot {
-            width: 100%;
-            height: 200px;
-        }
-
-        .motion-readout {
-            margin-top: 4px;
-            font-size: 10px;
-            font-family: ui-monospace, SFMonoRegular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-            color: var(--text-muted);
-        }
-
-        .motion-readout span {
-            color: var(--accent);
-        }
-
-                .bottom-row {
-            display: flex;
-            gap: 16px;
-            align-items: stretch;
-        }
-
-        .bottom-row .panel {
-            flex: 1;
-        }
-
-        .regression-widget {
-            border-radius: 10px;
-            border: 1px solid rgba(31, 41, 55, 0.9);
-            background: rgba(3, 7, 18, 0.96);
-            padding: 8px 8px 10px 8px;
-            margin-top: 8px;
-        }
-
-        .regression-meta {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 4px;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.14em;
-            color: var(--text-muted);
-        }
-
-        #regressionPlot {
-            width: 100%;
-            height: 180px;
-        }
-
-
-    </style>
 </head>
 <body>
     <div class="container">
         <header class="header">
             <div class="header-left">
-                <h1>WALL-E</h1>
+                <h1>BALL-E</h1>
                 <div class="subline">Democratizing trash collection</div>
             </div>
             <div class="header-right">
@@ -596,8 +118,8 @@
                 </div>
             </section>
 
-            <section class="right-column">
-                    <div class="panel">
+                        <section class="right-column">
+                <div class="panel">
                     <div class="panel-header">
                         <div class="panel-title"><span>Motion</span> / Trajectory</div>
                         <div class="panel-tag">Vector Field</div>
@@ -623,7 +145,77 @@
                         <div id="regressionPlot"></div>
                     </div>
                 </div>
-                
+
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title"><span>Drive</span> / Mecanum</div>
+                        <div class="panel-tag">Wheel Outputs</div>
+                    </div>
+
+                    <div class="drive-widget">
+                        <div class="drive-meta">
+                            <div>Motor powers</div>
+                            <div>Normalized [-1, 1]</div>
+                        </div>
+                        <div class="drive-grid">
+                            <div class="drive-wheel" id="wheel-fl">
+                                <div class="drive-wheel-header">
+                                    <span>FL</span>
+                                    <span class="drive-dir" id="wheel-fl-dir">IDLE</span>
+                                </div>
+                                <div class="drive-bar-shell">
+                                    <div class="drive-bar-fill" id="wheel-fl-bar"></div>
+                                </div>
+                                <div class="drive-wheel-footer">
+                                    <div>front left</div>
+                                    <div class="drive-value" id="wheel-fl-val">0.00</div>
+                                </div>
+                            </div>
+
+                            <div class="drive-wheel" id="wheel-fr">
+                                <div class="drive-wheel-header">
+                                    <span>FR</span>
+                                    <span class="drive-dir" id="wheel-fr-dir">IDLE</span>
+                                </div>
+                                <div class="drive-bar-shell">
+                                    <div class="drive-bar-fill" id="wheel-fr-bar"></div>
+                                </div>
+                                <div class="drive-wheel-footer">
+                                    <div>front right</div>
+                                    <div class="drive-value" id="wheel-fr-val">0.00</div>
+                                </div>
+                            </div>
+
+                            <div class="drive-wheel" id="wheel-rl">
+                                <div class="drive-wheel-header">
+                                    <span>RL</span>
+                                    <span class="drive-dir" id="wheel-rl-dir">IDLE</span>
+                                </div>
+                                <div class="drive-bar-shell">
+                                    <div class="drive-bar-fill" id="wheel-rl-bar"></div>
+                                </div>
+                                <div class="drive-wheel-footer">
+                                    <div>rear left</div>
+                                    <div class="drive-value" id="wheel-rl-val">0.00</div>
+                                </div>
+                            </div>
+
+                            <div class="drive-wheel" id="wheel-rr">
+                                <div class="drive-wheel-header">
+                                    <span>RR</span>
+                                    <span class="drive-dir" id="wheel-rr-dir">IDLE</span>
+                                </div>
+                                <div class="drive-bar-shell">
+                                    <div class="drive-bar-fill" id="wheel-rr-bar"></div>
+                                </div>
+                                <div class="drive-wheel-footer">
+                                    <div>rear right</div>
+                                    <div class="drive-value" id="wheel-rr-val">0.00</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
         </main>
     </div>
@@ -647,6 +239,8 @@
             hasData: false
         };
 
+        const MIN_TRAJ_POINTS = 4;
+
 
         socket.on('detection_update', function(data) {
             updateStatus(data);
@@ -664,6 +258,18 @@
             logEntries = 0;
             updateLogCount();
             updatePlot();
+        });
+
+        socket.on('motion_update', function (data) {
+            updateMotionWidgetBackend(data);
+        });
+
+        socket.on('trajectory_fit', function (data) {
+            updateRegressionPlotBackend(data);
+        });
+
+        socket.on('motor_update', function (data) {
+            updateMotorWidget(data);
         });
 
 
@@ -752,7 +358,140 @@
 
             updatePlot();
         }
-        
+
+        function updateMotionWidgetBackend(motion) {
+            const textV = document.getElementById('motionVelocityText');
+            const textA = document.getElementById('motionAccelText');
+
+            if (!motion || !motion.has_data) {
+                if (textV) textV.textContent = 'v_des: vx=0.0, vy=0.0 px/s';
+                if (textA) textA.textContent = 'a_des: ax=0.0, ay=0.0 px/s²';
+                // optional: clear arrows from Plotly plot
+                return;
+            }
+
+            const vx = motion.vx || 0;
+            const vy = motion.vy || 0;
+            const ax = motion.ax || 0;
+            const ay = motion.ay || 0;
+
+            if (textV) {
+                textV.textContent = `v_des: vx=${vx.toFixed(1)}, vy=${vy.toFixed(1)} px/s`;
+            }
+            if (textA) {
+                textA.textContent = `a_des: ax=${ax.toFixed(1)}, ay=${ay.toFixed(1)} px/s²`;
+            }
+
+            // if you built a Plotly vector plot, update it here using vx, vy, ax, ay
+            // for example: draw quiver arrows centered at frame center
+        }
+
+        function updateRegressionPlotBackend(data) {
+            const plotId = 'regressionPlot';
+            const el = document.getElementById(plotId);
+            if (!el) return;
+
+            const layout = {
+                margin: { l: 40, r: 10, t: 10, b: 30 },
+                xaxis: {
+                    title: { text: 'X (px)', font: { size: 9 } },
+                    range: [0, trajMaxX],
+                    gridcolor: '#1f2933',
+                    zeroline: false
+                },
+                yaxis: {
+                    title: { text: 'Y (px)', font: { size: 9 } },
+                    range: [trajMaxY, 0],
+                    gridcolor: '#1f2933',
+                    zeroline: false,
+                    scaleanchor: 'x'
+                },
+                showlegend: true,
+                legend: { orientation: 'h', y: -0.2, x: 0.0 },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#f9fafb', size: 9 }
+            };
+
+            if (!data || !data.has_data || trajectoryPoints.length < MIN_TRAJ_POINTS) {
+                Plotly.react(plotId, [], layout, { displayModeBar: false, staticPlot: true });
+                return;
+            }
+
+            const xs = trajectoryPoints.map(p => p.x);
+            const ys = trajectoryPoints.map(p => p.y);
+
+            const scatterTrace = {
+                x: xs,
+                y: ys,
+                mode: 'markers',
+                type: 'scatter',
+                name: 'trajectory',
+                marker: { size: 6 }
+            };
+
+            const lineTrace = {
+                x: data.line_x || [],
+                y: data.line_y || [],
+                mode: 'lines',
+                type: 'scatter',
+                name: 'line of best fit',
+                line: { width: 2, dash: 'dot' }
+            };
+
+            Plotly.react(
+                plotId,
+                [scatterTrace, lineTrace],
+                layout,
+                { displayModeBar: false, staticPlot: true }
+            );
+        }
+
+
+        function updateMotorWidget(data) {
+            if (!data) return;
+
+            const wheels = [
+                { key: 'fl', bar: 'wheel-fl-bar', val: 'wheel-fl-val', dir: 'wheel-fl-dir' },
+                { key: 'fr', bar: 'wheel-fr-bar', val: 'wheel-fr-val', dir: 'wheel-fr-dir' },
+                { key: 'rl', bar: 'wheel-rl-bar', val: 'wheel-rl-val', dir: 'wheel-rl-dir' },
+                { key: 'rr', bar: 'wheel-rr-bar', val: 'wheel-rr-val', dir: 'wheel-rr-dir' },
+            ];
+
+            wheels.forEach(w => {
+                const raw = typeof data[w.key] === 'number' ? data[w.key] : 0.0;
+                const clipped = Math.max(-1.0, Math.min(1.0, raw));
+                const magnitude = Math.abs(clipped);
+
+                const barEl = document.getElementById(w.bar);
+                const valEl = document.getElementById(w.val);
+                const dirEl = document.getElementById(w.dir);
+
+                if (!barEl || !valEl || !dirEl) return;
+
+                // height between 5 percent and 100 percent
+                const h = magnitude < 0.02 ? 5 : 5 + 95 * magnitude;
+                barEl.style.height = h.toFixed(1) + '%';
+
+                // direction label and bar color
+                if (magnitude < 0.02) {
+                    dirEl.textContent = 'IDLE';
+                    barEl.style.background =
+                        'linear-gradient(180deg, rgba(148, 163, 184, 0.4), rgba(55, 65, 81, 0.2))';
+                } else if (clipped > 0) {
+                    dirEl.textContent = 'FWD';
+                    barEl.style.background =
+                        'linear-gradient(180deg, rgba(249, 250, 251, 0.95), rgba(156, 163, 175, 0.3))';
+                } else {
+                    dirEl.textContent = 'REV';
+                    barEl.style.background =
+                        'linear-gradient(180deg, rgba(248, 113, 113, 0.95), rgba(127, 29, 29, 0.5))';
+                }
+
+                valEl.textContent = clipped.toFixed(2);
+            });
+        }
+
 
 
         function updatePlot() {
@@ -830,7 +569,7 @@
 
         function computeDesiredMotion() {
             // need at least two points and valid resolution
-            if (trajectoryPoints.length < 2 || trajMaxX <= 0 || trajMaxY <= 0) {
+            if (trajectoryPoints.length < MIN_TRAJ_POINTS || trajMaxX <= 0 || trajMaxY <= 0) {
                 desiredMotion = {
                     vx: 0,
                     vy: 0,
@@ -1062,7 +801,7 @@
                 font: { color: '#f9fafb', size: 9 }
             };
 
-            if (trajectoryPoints.length < 2) {
+            if (trajectoryPoints.length < MIN_TRAJ_POINTS) {
                 Plotly.react(plotId, [], layout, { displayModeBar: false, staticPlot: true });
                 return;
             }
@@ -1119,7 +858,7 @@
 
         function computeLinearFit(points) {
             const n = points.length;
-            if (n < 2) {
+            if (n < MIN_TRAJ_POINTS) {
                 return null;
             }
 

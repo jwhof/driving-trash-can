@@ -8,8 +8,12 @@ from flask_socketio import SocketIO
 import threading
 from collections import deque
 from datetime import datetime
-from collections import deque
-import time
+
+import serial
+import config
+from motion_planner import MotionPlanner
+from mecanum_controller import MecanumController, MotorCommand
+
 
 
 class ArducamTracker:
@@ -22,6 +26,14 @@ class ArducamTracker:
         self.camera_index = camera_index
         self.width = width
         self.height = height
+
+        self.motion_planner = MotionPlanner(width=self.width, height=self.height)
+        self.mecanum = MecanumController()
+        self.last_control_time = None
+        self.motor_serial = self._init_motor_serial()
+        self.last_motion = None
+        self.last_regression = None
+
         
         # Initialize camera with Arducam-specific settings
         self.initialize_arducam()
@@ -49,6 +61,8 @@ class ArducamTracker:
         self.app = Flask(__name__, template_folder=template_dir)
         self.socketio = SocketIO(self.app, cors_allowed_origins="*")
         self.setup_flask_routes()
+
+
         
     def initialize_arducam(self):
         """Initialize Arducam with optimized settings for macOS"""
@@ -323,6 +337,39 @@ class ArducamTracker:
                    (50, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
         
         return frame, (center_x, center_y, w, h)
+    
+    def _init_motor_serial(self):
+        """
+        Try to open the STM32 over USB serial.
+        Adjust port and baudrate to your board.
+        """
+        try:
+            ser = serial.Serial(
+                config.SERIAL_PORT,
+                config.SERIAL_BAUDRATE,
+                timeout=config.SERIAL_TIMEOUT,
+            )
+
+            print("✓ Motor link: /dev/ttyACM0 @ 115200")
+            return ser
+        except Exception as e:
+            print(f"Motor link unavailable: {e}")
+            return None
+
+    def _send_motor_command(self, cmd: MotorCommand):
+        """
+        Send normalized mecanum powers to the STM32.
+        Format: M fl fr rl rr\n  with each in [-1, 1].
+        """
+        if self.motor_serial is None:
+            return
+
+        try:
+            line = f"M {cmd.fl:.3f} {cmd.fr:.3f} {cmd.rl:.3f} {cmd.rr:.3f}\n"
+            self.motor_serial.write(line.encode("ascii"))
+        except Exception as e:
+            print(f"Motor serial error: {e}")
+
 
     def generate_frames(self):
         """Generate video frames with Arducam optimization"""
@@ -365,6 +412,45 @@ class ArducamTracker:
                 cutoff = now - TAIL_SECONDS
                 while self.trajectory and self.trajectory[0][2] < cutoff:
                     self.trajectory.popleft()
+
+                # backend motion planning on the Pi
+                pts = list(self.trajectory)
+                if len(pts) >= 2 and self.tracking_enabled:
+                    motion, reg = self.motion_planner.compute(pts)
+                    self.last_motion = motion
+                    self.last_regression = reg
+
+                    # send to dashboard for visualization
+                    self.socketio.emit("motion_update", motion.to_dict())
+                    self.socketio.emit("trajectory_fit", reg.to_dict())
+
+                    # hook for STM32 motor commands
+                    self._apply_motion_to_motors(motion)
+                
+                                # --- backend motion planning and mecanum control ---
+                points = list(self.trajectory)
+                if self.tracking_enabled and len(points) >= 2:
+                    # planner works in image space on the Pi
+                    motion, reg = self.motion_planner.compute(points)
+
+                    # send to dashboard
+                    self.socketio.emit("motion_update", motion.to_dict())
+                    self.socketio.emit("trajectory_fit", reg.to_dict())
+
+                    # PID plus mecanum mapping to wheel powers
+                    now_s = now
+                    if self.last_control_time is None:
+                        dt = 0.0
+                    else:
+                        dt = max(1e-3, now_s - self.last_control_time)
+                    self.last_control_time = now_s
+
+                    motor_cmd = self.mecanum.compute(motion, dt)
+                    if motor_cmd is not None:
+                        # emit to UI for visualization
+                        self.socketio.emit("motor_update", motor_cmd.to_dict())
+                        # send to STM32 over USB serial
+                        self._send_motor_command(motor_cmd)
 
                 # --- draw trajectory regardless of whether this frame had a detection ---
                 points = list(self.trajectory)
@@ -434,6 +520,27 @@ class ArducamTracker:
             except Exception as e:
                 print(f"Frame generation error: {e}")
                 time.sleep(0.1)
+
+    def _apply_motion_to_motors(self, motion):
+        """
+        Map image-plane desired velocity to robot commands.
+
+        For now this is a stub. Here you convert motion.vx, motion.vy
+        into wheel/steering commands and send them over serial / CAN
+        to the STM32.
+        """
+        if not motion.has_data:
+            return
+
+        # example placeholder:
+        # forward proportional to -motion.vy, turn proportional to -motion.vx
+        forward = -motion.vy
+        turn = -motion.vx
+
+        # TODO: scale and saturate, then send to STM32
+        # e.g. self.motor_serial.write(f"F{forward:.2f} T{turn:.2f}\n".encode())
+        pass
+
 
 
     def get_system_stats(self):
