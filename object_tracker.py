@@ -65,16 +65,15 @@ class ArducamTracker:
 
         
     def initialize_arducam(self):
-        """Initialize Arducam with optimized settings for macOS"""
+        """Initialize Arducam on Raspberry Pi"""
         print(f"Initializing Arducam at index {self.camera_index}...")
 
-        # Default to test mode unless we succeed
         self.test_mode = False
         self.cap = None
 
         try:
-            # Use AVFoundation like in your working test script
-            self.cap = cv2.VideoCapture(self.camera_index, cv2.CAP_AVFOUNDATION)
+            # On Pi, use the default backend (V4L2)
+            self.cap = cv2.VideoCapture(self.camera_index)
 
             if not self.cap.isOpened():
                 print(f"Could not open camera {self.camera_index}")
@@ -82,40 +81,28 @@ class ArducamTracker:
                 self.test_mode = True
                 return
 
-            print(f"✓ Camera {self.camera_index} opened successfully")
-
-            # Warm up the camera BEFORE changing properties
-            ret = False
-            frame = None
-            for i in range(30):
+            # Try to grab one test frame
+            print("Testing first frame from Arducam...")
+            for _ in range(10):
                 ret, frame = self.cap.read()
-                print(f"  Warmup attempt {i+1}: {ret}")
                 if ret and frame is not None:
                     break
                 time.sleep(0.05)
 
             if not ret or frame is None:
-                print("✗ Camera opened but cannot read frames")
+                print("Camera opened but cannot read frames")
                 self.cap.release()
                 self.cap = None
                 self.test_mode = True
                 return
 
-            # Now try to set resolution (keep it minimal)
+            # Set resolution
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
 
             actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            print(f"✓ Frame capture successful! Resolution: {actual_width}x{actual_height}")
-
-            # If you really want, you can try FPS after things work:
-            # self.cap.set(cv2.CAP_PROP_FPS, 30)
-
-            # I would drop these on macOS, they are often unsupported:
-            # self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            # self.cap.set(cv2.CAP_PROP_AUTOFOCUS, 1)
-            # self.cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1)
+            print(f"Frame capture successful! Resolution: {actual_width}x{actual_height}")
 
         except Exception as e:
             print(f"Camera initialization error: {e}")
@@ -124,11 +111,6 @@ class ArducamTracker:
                 self.cap = None
             self.test_mode = True
 
-        
-        # If we get here, camera failed - enable test mode
-        if self.cap is None:
-            print("⚠ Enabling TEST MODE")
-            self.test_mode = True
         
     def setup_flask_routes(self):
         @self.app.route('/')
