@@ -8,13 +8,11 @@ from flask_socketio import SocketIO
 import threading
 from collections import deque
 from datetime import datetime
-
 import serial
 import config
 from motion_planner import MotionPlanner
 from mecanum_controller import MecanumController, MotorCommand
-
-
+from odometry import MecanumOdometry
 
 class ArducamTracker:
     def __init__(self, camera_index=0, width=1980, height=1080):
@@ -33,6 +31,8 @@ class ArducamTracker:
         self.motor_serial = self._init_motor_serial()
         self.last_motion = None
         self.last_regression = None
+        self.odom = MecanumOdometry()
+        self.last_control_time = None
 
         
         # Initialize camera with Arducam-specific settings
@@ -430,14 +430,10 @@ class ArducamTracker:
                                 # --- backend motion planning and mecanum control ---
                 points = list(self.trajectory)
                 if self.tracking_enabled and len(points) >= 2:
-                    # planner works in image space on the Pi
                     motion, reg = self.motion_planner.compute(points)
-
-                    # send to dashboard
                     self.socketio.emit("motion_update", motion.to_dict())
                     self.socketio.emit("trajectory_fit", reg.to_dict())
 
-                    # PID plus mecanum mapping to wheel powers
                     now_s = now
                     if self.last_control_time is None:
                         dt = 0.0
@@ -447,10 +443,14 @@ class ArducamTracker:
 
                     motor_cmd = self.mecanum.compute(motion, dt)
                     if motor_cmd is not None:
-                        # emit to UI for visualization
+                        # send to mec widget and STM32
                         self.socketio.emit("motor_update", motor_cmd.to_dict())
-                        # send to STM32 over USB serial
                         self._send_motor_command(motor_cmd)
+
+                        # approximate odometry from motor command
+                        pose = self.odom.step(motor_cmd, dt)
+                        self.socketio.emit("pose_update", pose.to_dict())
+
 
                 # --- draw trajectory regardless of whether this frame had a detection ---
                 points = list(self.trajectory)

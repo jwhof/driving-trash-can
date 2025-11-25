@@ -40,8 +40,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
-    margin-bottom: 24px;
-    padding-bottom: 16px;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
     border-bottom: 1px solid rgba(55, 65, 81, 0.7);
 }
 
@@ -161,13 +161,15 @@ body {
     border: 1px solid rgba(75, 85, 99, 0.9);
     background: #000;
     display: block;
+    width: 560px;
+    height:360px
 }
 
 .log-panel {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    height: 480px;      
+    height: 360px;      
 }
 
 
@@ -406,7 +408,7 @@ button:hover::before {
     }
 }
 
-        .motion-widget {
+.motion-widget {
     border-radius: 10px;
     border: 1px solid rgba(31, 41, 55, 0.9);
     background: rgba(3, 7, 18, 0.96);
@@ -558,4 +560,42 @@ button:hover::before {
 .drive-dir {
     text-transform: uppercase;
     letter-spacing: 0.08em;
+}
+
+.pose-panel {
+    margin-top: 8px;
+}
+
+.pose-widget {
+    border-radius: 10px;
+    border: 1px solid rgba(31, 41, 55, 0.9);
+    background: rgba(3, 7, 18, 0.96);
+    padding: 8px 8px 10px 8px;
+}
+
+.pose-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--text-muted);
+}
+
+#posePlot {
+    width: 100%;
+    height: 160px;
+}
+
+.pose-readout {
+    margin-top: 4px;
+    font-size: 10px;
+    font-family: ui-monospace, SFMonoRegular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    color: var(--text-muted);
+}
+
+.pose-readout span {
+    color: var(--accent);
 }

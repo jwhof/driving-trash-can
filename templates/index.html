@@ -44,109 +44,8 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- <div class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title"><span>Trajectory</span> / Position History</div>
-                        <div class="panel-tag">Pixels Space</div>
-                    </div>
-                    <div class="trajectory-wrapper">
-                        <div class="trajectory-meta">
-                            <div>Plot: X vs Y</div>
-                            <div>Anchor: <span>Top Left</span></div>
-                        </div>
-                        <div id="trajectoryPlot"></div>
-                    </div>
-                </div> -->
-                                <div class="bottom-row">
+            <div class="bottom-row">
                     <div class="panel">
-                        <div class="panel-header">
-                            <div class="panel-title"><span>Control</span> / Session</div>
-                            <div class="panel-tag">Command</div>
-                        </div>
-                        <div class="controls-row">
-                            <div class="controls">
-                                <button class="btn-start" onclick="toggleTracking(true)">Start</button>
-                                <button class="btn-stop" onclick="toggleTracking(false)">Stop</button>
-                                <button class="btn-clear" onclick="clearLogs()">Clear Log</button>
-                            </div>
-                        </div>
-                        <div id="status" class="status status-idle">
-                            <div class="status-header">
-                                <span>Status</span>
-                                <span id="statusModeLabel">Idle</span>
-                            </div>
-                            <div class="status-line" id="statusLine1">Waiting for box detection.</div>
-                            <div class="status-line" id="statusLine2">No active target.</div>
-                        </div>
-                    </div>
-
-                    <div class="panel">
-                        <div class="panel-header">
-                            <div class="panel-title"><span>System</span> / Telemetry</div>
-                            <div class="panel-tag" id="cameraModeTag">Arducam Live</div>
-                        </div>
-                        <div class="stat-grid">
-                            <div class="stat-card">
-                                <div class="stat-label">Log Count</div>
-                                <div class="stat-value" id="statLogs">0</div>
-                            </div>
-                            
-                            <div class="stat-card">
-                                <div class="stat-label">Frame Rate</div>
-                                <div class="stat-value" id="statFPS">0.0 fps</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-label">Trajectory Points</div>
-                                <div class="stat-value" id="statTrajectory">0</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-label">Cam Reso</div>
-                                <div class="stat-value" id="statResolution">1280x720</div>
-                            </div>
-                            <!-- <div class="stat-card">
-                                <div class="stat-label">Detections</div>
-                                <div class="stat-value accent" id="statDetections">0</div>
-                            </div> -->
-                            <!-- <div class="stat-card">
-                                <div class="stat-label">Tracking Status</div>
-                                <div class="stat-value success" id="statTracking">Active</div>
-                            </div> -->
-                            
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-                        <section class="right-column">
-                <div class="panel">
-                    <div class="panel-header">
-                        <div class="panel-title"><span>Motion</span> / Trajectory</div>
-                        <div class="panel-tag">Vector Field</div>
-                    </div>
-
-                    <div class="motion-widget">
-                        <div class="motion-meta">
-                            <div>Desired accel / velo</div>
-                            <div>Goal: frame center</div>
-                        </div>
-                        <div id="motionVectorPlot"></div>
-                        <div class="motion-readout">
-                            <div id="motionVelocityText">v_des: vx=0.0, vy=0.0 px/s</div>
-                            <div id="motionAccelText">a_des: ax=0.0, ay=0.0 px/s²</div>
-                        </div>
-                    </div>
-
-                    <div class="regression-widget">
-                        <div class="regression-meta">
-                            <div>Traj fit</div>
-                            <div>LinReg</div>
-                        </div>
-                        <div id="regressionPlot"></div>
-                    </div>
-                </div>
-
-                <div class="panel">
                     <div class="panel-header">
                         <div class="panel-title"><span>Drive</span> / Mecanum</div>
                         <div class="panel-tag">Wheel Outputs</div>
@@ -216,6 +115,104 @@
                         </div>
                     </div>
                 </div>
+                <div class="panel pose-panel">
+                    <div class="panel-header">
+                        <div class="panel-title"><span>Field</span> / Pose</div>
+                        <div class="panel-tag">Odometry</div>
+                    </div>
+
+                    <div class="pose-widget">
+                        <div class="pose-meta">
+                            <div>Trash can position</div>
+                            <div>Approx open loop</div>
+                        </div>
+                        <div id="posePlot"></div>
+                        <div class="pose-readout">
+                            <div id="poseText">
+                                x=<span>0.00</span> m,
+                                y=<span>0.00</span> m,
+                                θ=<span>0.00</span> rad
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+            </section>
+
+            <section class="right-column">
+                <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title"><span>Control</span> / Session</div>
+                            <div class="panel-tag">Command</div>
+                        </div>
+                        <div class="controls-row">
+                            <div class="controls">
+                                <button class="btn-start" onclick="toggleTracking(true)">Start</button>
+                                <button class="btn-stop" onclick="toggleTracking(false)">Stop</button>
+                                <button class="btn-clear" onclick="clearLogs()">Clear Log</button>
+                            </div>
+                        </div>
+                        <div id="status" class="status status-idle">
+                            <div class="status-header">
+                                <span>Status</span>
+                                <span id="statusModeLabel">Idle</span>
+                            </div>
+                            <div class="status-line" id="statusLine1">Waiting for box detection.</div>
+                            <div class="status-line" id="statusLine2">No active target.</div>
+                        </div>
+                    </div>
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title"><span>Motion</span> / Trajectory</div>
+                        <div class="panel-tag">Vector Field</div>
+                    </div>
+
+                    <div class="motion-widget">
+                        <div class="motion-meta">
+                            <div>Desired accel / velo</div>
+                            <div>Goal: frame center</div>
+                        </div>
+                        <div id="motionVectorPlot"></div>
+                        <div class="motion-readout">
+                            <div id="motionVelocityText">v_des: vx=0.0, vy=0.0 px/s</div>
+                            <div id="motionAccelText">a_des: ax=0.0, ay=0.0 px/s²</div>
+                        </div>
+                    </div>
+
+                    <div class="regression-widget">
+                        <div class="regression-meta">
+                            <div>Traj fit</div>
+                            <div>LinReg</div>
+                        </div>
+                        <div id="regressionPlot"></div>
+                    </div>
+                </div>
+                    <div class="panel">
+                        <div class="panel-header">
+                            <div class="panel-title"><span>System</span> / Telemetry</div>
+                            <div class="panel-tag" id="cameraModeTag">Arducam Live</div>
+                        </div>
+                        <div class="stat-grid">
+                            <div class="stat-card">
+                                <div class="stat-label">Log Count</div>
+                                <div class="stat-value" id="statLogs">0</div>
+                            </div>
+                            
+                            <div class="stat-card">
+                                <div class="stat-label">Frame Rate</div>
+                                <div class="stat-value" id="statFPS">0.0 fps</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Trajectory Points</div>
+                                <div class="stat-value" id="statTrajectory">0</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Cam Reso</div>
+                                <div class="stat-value" id="statResolution">1280x720</div>
+                            </div>
+                        </div>
+                    </div>
             </section>
         </main>
     </div>
@@ -271,6 +268,11 @@
         socket.on('motor_update', function (data) {
             updateMotorWidget(data);
         });
+
+        socket.on('pose_update', function (data) {
+            updatePoseWidget(data);
+        });
+
 
 
         function toggleTracking(enabled) {
@@ -446,6 +448,65 @@
                 { displayModeBar: false, staticPlot: true }
             );
         }
+
+        function updatePoseWidget(data) {
+            const plotId = 'posePlot';
+            const el = document.getElementById(plotId);
+            if (!el || !data) {
+                return;
+            }
+
+            const x = data.x || 0.0;
+            const y = data.y || 0.0;
+            const theta = data.theta || 0.0;
+
+            // robot body as a short arrow
+            const bodyLen = 0.3; // meters, just for drawing
+            const x2 = x + bodyLen * Math.cos(theta);
+            const y2 = y + bodyLen * Math.sin(theta);
+
+            const bodyTrace = {
+                x: [x, x2],
+                y: [y, y2],
+                mode: 'lines+markers',
+                type: 'scatter',
+                name: 'robot',
+                line: { width: 3 },
+                marker: { size: 6 }
+            };
+
+            const layout = {
+                margin: { l: 40, r: 10, t: 10, b: 30 },
+                xaxis: {
+                    title: { text: 'x (m)', font: { size: 9 } },
+                    range: [-2, 2],
+                    gridcolor: '#1f2933',
+                    zeroline: true
+                },
+                yaxis: {
+                    title: { text: 'y (m)', font: { size: 9 } },
+                    range: [-2, 2],
+                    gridcolor: '#1f2933',
+                    zeroline: true,
+                    scaleanchor: 'x'
+                },
+                showlegend: false,
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { color: '#f9fafb', size: 9 }
+            };
+
+            Plotly.react(plotId, [bodyTrace], layout, { displayModeBar: false, staticPlot: true });
+
+            const poseText = document.getElementById('poseText');
+            if (poseText) {
+                poseText.innerHTML =
+                    `x=<span>${x.toFixed(2)}</span> m, ` +
+                    `y=<span>${y.toFixed(2)}</span> m, ` +
+                    `θ=<span>${theta.toFixed(2)}</span> rad`;
+            }
+        }
+
 
 
         function updateMotorWidget(data) {
