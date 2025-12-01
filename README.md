@@ -5,14 +5,14 @@ Welcome! This project is a fun experiment in robotics, computer vision, and web 
 ### What is this?
 This is a Python-based system that lets a trash can (or any robot with mecanum wheels) track and follow a brown box using a camera, plan its motion, and drive itself around. It features:
 
-- **Real-time object tracking** (finds a brown box in the camera feed)
+- **Real-time object tracking** (finds a thrown object in the camera feed)
 - **Motion planning** (figures out how to move toward the target)
 - **Mecanum wheel control** (lets the robot move in any direction)
 - **Odometry** (estimates the robot's position)
 - **Web dashboard** (see video, stats, and control the robot from your browser)
 
 ### How does it work?
-1. **Camera**: The robot uses an Arducam (or similar) to capture video.
+1. **Camera**: The robot uses an Arducam to capture video.
 2. **Object Tracking**: The system detects a brown box in the video stream using color filtering and motion gating.
 3. **Motion Planning**: It computes the best way to move toward the target using a simple regression and control logic.
 4. **Mecanum Control**: The robot's wheels are controlled to move in any direction, using PID controllers for smooth motion.
@@ -46,13 +46,8 @@ This is a Python-based system that lets a trash can (or any robot with mecanum w
 - Logs of detections
 - Controls to start/stop tracking and clear logs
 
-### Can I use this for my own robot?
-Absolutely! The code is modular and can be adapted for other robots with mecanum wheels and a camera. Tweak the color detection, PID gains, and motion logic as needed.
 
----
-Made with 🗑️ and ❤️ for robotics experiments.
-
-
+### Wifi Hotspot Info
 
 create wifi hotspot
 sudo nmcli dev wifi hotspot ifname wlan0 con-name trashcan-hotspot ssid TrashCanNet password 'trash1234'
