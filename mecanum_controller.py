@@ -65,6 +65,26 @@ class MecanumController:
             clamp=clamp,
         )
 
+    def compute_manual(self, vx: float, vy: float, omega: float = 0.0) -> MotorCommand:
+        """
+        Directly map inputs to wheel powers without PID.
+        vx, vy: -1.0 to 1.0 (from arrow keys)
+        """
+        # Map inputs to robot frame 
+        # Image Up (negative Y) -> Robot Forward (+x)
+        # Image Left (negative X) -> Robot Strafe Left (+y)
+        v_forward = -vy
+        v_strafe = -vx
+        
+        # Mecanum mixing
+        # fl = forward - strafe - rotate
+        fl = v_forward - v_strafe - omega
+        fr = v_forward + v_strafe + omega
+        rl = v_forward + v_strafe - omega
+        rr = v_forward - v_strafe + omega
+
+        return MotorCommand(fl=fl, fr=fr, rl=rl, rr=rr)
+
     def compute(self, motion: MotionResult, dt: float) -> Optional[MotorCommand]:
         if not motion.has_data:
             return None
@@ -75,6 +95,8 @@ class MecanumController:
 
         u_x = self.pid_x.step(err_x, dt)
         u_y = self.pid_y.step(err_y, dt)
+
+
 
         # map from image frame to robot frame
         # image x right  -> robot +y (strafe right)

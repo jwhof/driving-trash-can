@@ -1,8 +1,7 @@
 from dataclasses import dataclass, asdict
 from typing import List, Tuple, Optional
-
+import time
 import config
-
 
 @dataclass
 class MotionResult:
@@ -50,6 +49,9 @@ class MotionPlanner:
 
         # minimum points for any useful regression
         self.min_points = config.MIN_TRAJ_POINTS_FOR_REGRESSION
+        
+        # Timeout duration in seconds
+        self.timeout = 0.5
 
     def _compute_linear_fit(self, pts: List[Tuple[float, float, float]]):
         n = len(pts)
@@ -88,8 +90,19 @@ class MotionPlanner:
     def compute(self, pts: List[Tuple[float, float, float]]) -> tuple[MotionResult, RegressionResult]:
         """Compute desired motion and regression from a trajectory segment."""
 
+        # Basic validation
         if len(pts) < self.min_points or self.width <= 0 or self.height <= 0:
             return MotionResult(has_data=False), RegressionResult(has_data=False)
+
+        # 1. SAFETY TIMEOUT CHECK
+        # Check if the last data point is older than 0.5 seconds
+        last_timestamp = pts[-1][2]
+        if (time.time() - last_timestamp) > self.timeout:
+            # Return explicit zero motion to stop motors
+            return (
+                MotionResult(has_data=True, vx=0.0, vy=0.0, ax=0.0, ay=0.0),
+                RegressionResult(has_data=False)
+            )
 
         # last two points
         x_last, y_last, t_last = pts[-1]
@@ -117,7 +130,6 @@ class MotionPlanner:
 
         slope = fit["slope"]
         mean_x = fit["mean_x"]
-        # mean_y = fit["mean_y"]
 
         # unit direction along fitted line
         if slope is None:

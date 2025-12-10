@@ -13,6 +13,8 @@ import config
 from motion_planner import MotionPlanner
 from mecanum_controller import MecanumController, MotorCommand
 from odometry import MecanumOdometry
+import sys
+import glob
 
 class ArducamTracker:
     def __init__(self, camera_index=0, width=1980, height=1080):
@@ -61,6 +63,11 @@ class ArducamTracker:
         self.app = Flask(__name__, template_folder=template_dir)
         self.socketio = SocketIO(self.app, cors_allowed_origins="*")
         self.setup_flask_routes()
+
+        self.manual_vx = 0.0
+        self.manual_vy = 0.0
+        self.last_manual_time = 0
+        self.manual_timeout = 0.5 # seconds before stopping if no key sent
 
 
         
@@ -146,6 +153,12 @@ class ArducamTracker:
                     'test_mode': True
                 }
         
+        @self.socketio.on('manual_drive')
+        def handle_manual_drive(data):
+            self.manual_vx = data.get('vx', 0.0)
+            self.manual_vy = data.get('vy', 0.0)
+            self.last_manual_time = time.time()
+
         @self.socketio.on('connect')
         def handle_connect():
             print('Client connected to WebSocket')
@@ -322,44 +335,77 @@ class ArducamTracker:
     
     def _init_motor_serial(self):
         """
-        Try to open the STM32 over USB serial.
-        Adjust port and baudrate to your board.
+        Initialize serial connection, handling macOS and Linux naming differences.
         """
-        try:
-            ser = serial.Serial(
-                config.SERIAL_PORT,
-                config.SERIAL_BAUDRATE,
-                timeout=config.SERIAL_TIMEOUT,
-            )
+        # 1. Define patterns based on OS
+        if sys.platform.startswith('darwin'):
+            # macOS patterns
+            patterns = ['/dev/tty.usbmodem*', '/dev/tty.usbserial*']
+        else:
+            # Linux/Pi patterns
+            patterns = ['/dev/ttyACM*', '/dev/ttyUSB*']
 
-            print("✓ Motor link: /dev/ttyACM0 @ 115200")
+        # 2. Find matching ports
+        possible_ports = []
+        for pattern in patterns:
+            possible_ports.extend(glob.glob(pattern))
+
+        if not possible_ports:
+            print(f"⚠ No serial devices found matching patterns: {patterns}")
+            print("  - Check USB cable (ensure it has data wires)")
+            print("  - On Mac, run 'ls /dev/tty.*' in terminal to verify")
+            return None
+
+        # 3. Connect to the first found port
+        port = possible_ports[0]
+        baud = getattr(config, 'SERIAL_BAUDRATE', 115200)
+
+        try:
+            ser = serial.Serial(port, baud, timeout=0.1)
+            print(f"✓ Motor link established: {port} @ {baud}")
             return ser
         except Exception as e:
-            print(f"Motor link unavailable: {e}")
+            print(f"⚠ Failed to open {port}: {e}")
             return None
 
     def _send_motor_command(self, cmd: MotorCommand):
         """
-        Send normalized mecanum powers to the STM32.
-        Format: M fl fr rl rr\n  with each in [-1, 1].
+        Send motor powers as comma-separated percentages over serial.
+        Format: "FL,FR,RL,RR\n" (e.g., "100,100,50,0")
         """
         if self.motor_serial is None:
             return
 
         try:
-            line = f"M {cmd.fl:.3f} {cmd.fr:.3f} {cmd.rl:.3f} {cmd.rr:.3f}\n"
+            # 1. Scale normalized float (-1.0 to 1.0) to percentage (-100 to 100)
+            # 2. Clamp between -100 and 100 to ensure safety
+            # 3. Convert to integer
+            def to_pct(val):
+                return int(max(-100, min(100, val * 100)))
+
+            fl_pct = to_pct(cmd.fl)
+            fr_pct = to_pct(cmd.fr)
+            rl_pct = to_pct(cmd.rl)
+            rr_pct = to_pct(cmd.rr)
+
+            # Format: "100,100,50,0"
+            line = f"{fl_pct},{fr_pct},{rl_pct},{rr_pct}\n"
+            
+            # Write bytes to serial
             self.motor_serial.write(line.encode("ascii"))
+            
         except Exception as e:
             print(f"Motor serial error: {e}")
+            # Optional: Attempt to reconnect if error persists
 
 
     def generate_frames(self):
-        """Generate video frames with Arducam optimization"""
+        """Generate video frames with Arducam optimization and Manual/Auto control mixing."""
         TAIL_SECONDS = 3.0  # how long the trail should live
 
         while True:
             try:
-                # --- acquire frame and detection ---
+                # --- 1. Acquire frame and detection ---
                 if self.test_mode:
                     frame, box_position = self.create_test_frame()
                     mask = None
@@ -371,7 +417,7 @@ class ArducamTracker:
                         continue
                     box_position, frame, mask = self.detect_brown_box(frame)
 
-                # FPS calculation
+                # --- 2. FPS calculation ---
                 self.frame_count += 1
                 if self.frame_count % 30 == 0:
                     elapsed = time.time() - self.start_time
@@ -381,81 +427,91 @@ class ArducamTracker:
                 processed_frame = frame.copy()
                 now = time.time()
 
-                # --- update trajectory only when we have a detection ---
+                # --- 3. Update trajectory (only if tracking enabled + box detected) ---
                 if self.tracking_enabled and box_position:
                     center_x, center_y, w, h = box_position
                     self.current_position = (center_x, center_y)
                     self.detection_count += 1
-
                     # store (x, y, t)
                     self.trajectory.append((center_x, center_y, now))
 
-                # drop old points so trail is at most TAIL_SECONDS long
+                # Drop old points so trail is at most TAIL_SECONDS long
                 cutoff = now - TAIL_SECONDS
                 while self.trajectory and self.trajectory[0][2] < cutoff:
                     self.trajectory.popleft()
 
-                # backend motion planning on the Pi
-                pts = list(self.trajectory)
-                if len(pts) >= 2 and self.tracking_enabled:
-                    motion, reg = self.motion_planner.compute(pts)
+                # --- 4. CONTROL LOGIC (Manual vs Autonomous) ---
+                motor_cmd = None
+                
+                # Check if manual input was received recently (within 0.5s)
+                # Defaults to 0 if variables aren't set yet to prevent crashes
+                last_manual = getattr(self, 'last_manual_time', 0)
+                manual_active = (now - last_manual) < 0.5
+
+                if manual_active:
+                    # >>> MANUAL MODE <<<
+                    vx = getattr(self, 'manual_vx', 0.0)
+                    vy = getattr(self, 'manual_vy', 0.0)
+                    # Use the new compute_manual method you added to MecanumController
+                    motor_cmd = self.mecanum.compute_manual(vx, vy)
+                
+                elif self.tracking_enabled and len(self.trajectory) >= 2:
+                    # >>> AUTONOMOUS MODE <<<
+                    # 1. Plan Motion
+                    motion, reg = self.motion_planner.compute(list(self.trajectory))
                     self.last_motion = motion
                     self.last_regression = reg
 
-                    # send to dashboard for visualization
+                    # 2. Update Web Interface with Plan
                     self.socketio.emit("motion_update", motion.to_dict())
                     self.socketio.emit("trajectory_fit", reg.to_dict())
 
-                    # hook for STM32 motor commands
-                    self._apply_motion_to_motors(motion)
-                
-                                # --- backend motion planning and mecanum control ---
-                points = list(self.trajectory)
-                if self.tracking_enabled and len(points) >= 2:
-                    motion, reg = self.motion_planner.compute(points)
-                    self.socketio.emit("motion_update", motion.to_dict())
-                    self.socketio.emit("trajectory_fit", reg.to_dict())
-
-                    now_s = now
+                    # 3. Calculate DT for PID
                     if self.last_control_time is None:
                         dt = 0.0
                     else:
-                        dt = max(1e-3, now_s - self.last_control_time)
-                    self.last_control_time = now_s
-
+                        dt = max(1e-3, now - self.last_control_time)
+                    
+                    # 4. Compute Motor Command via PID
                     motor_cmd = self.mecanum.compute(motion, dt)
-                    if motor_cmd is not None:
-                        # send to mec widget and STM32
-                        self.socketio.emit("motor_update", motor_cmd.to_dict())
-                        self._send_motor_command(motor_cmd)
 
-                        # approximate odometry from motor command
-                        pose = self.odom.step(motor_cmd, dt)
-                        self.socketio.emit("pose_update", pose.to_dict())
+                # --- 5. Execute Motor Command ---
+                if motor_cmd is not None:
+                    self.last_control_time = now
+                    
+                    # Send to Web UI
+                    self.socketio.emit("motor_update", motor_cmd.to_dict())
+                    
+                    # Send to STM32 via Serial
+                    self._send_motor_command(motor_cmd)
 
+                    # Update Odometry
+                    dt_odom = 0.1 # approximate if dt not available
+                    pose = self.odom.step(motor_cmd, dt_odom)
+                    self.socketio.emit("pose_update", pose.to_dict())
 
-                # --- draw trajectory regardless of whether this frame had a detection ---
+                # --- 6. Visualization: Draw Trajectory ---
                 points = list(self.trajectory)
                 if len(points) >= 2:
                     for i in range(1, len(points)):
                         x1, y1, t1 = points[i - 1]
                         x2, y2, t2 = points[i]
 
-                        # newer segments brighter, older segments darker
+                        # Newer segments brighter
                         age = now - t2
                         frac = max(0.0, min(1.0, 1.0 - age / TAIL_SECONDS))
-                        intensity = int(60 + 195 * frac)  # from 60 to 255
-                        color = (intensity, 0, 0)        # bright blue in BGR
+                        intensity = int(60 + 195 * frac)
+                        color = (intensity, 0, 0) # BGR: Blue
 
                         cv2.line(
                             processed_frame,
                             (int(x1), int(y1)),
                             (int(x2), int(y2)),
                             color,
-                            6,  # thickness
+                            6
                         )
 
-                # --- draw current detection box only on frames with detection ---
+                # --- 7. Visualization: Draw Box ---
                 if self.tracking_enabled and box_position:
                     center_x, center_y, w, h = box_position
                     cv2.rectangle(
@@ -467,7 +523,6 @@ class ArducamTracker:
                     )
                     cv2.circle(processed_frame, (center_x, center_y), 8, (0, 0, 255), -1)
 
-                    # emit detection only when there is one
                     self.socketio.emit(
                         "detection_update",
                         {
@@ -481,16 +536,16 @@ class ArducamTracker:
                         },
                     )
 
-
-                # stats emitted every 10 frames as before
+                # --- 8. Housekeeping ---
+                # Emit stats every 10 frames
                 if self.frame_count % 10 == 0:
                     self.socketio.emit("system_stats", self.get_system_stats())
 
-                # resize for streaming if needed
+                # Resize for streaming if needed
                 if processed_frame.shape[1] > 1280:
                     processed_frame = cv2.resize(processed_frame, (1280, 720))
 
-                # encode and yield frame
+                # Encode and yield
                 ret, buffer = cv2.imencode(".jpg", processed_frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 frame_bytes = buffer.tobytes()
 

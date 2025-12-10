@@ -273,6 +273,42 @@
             updatePoseWidget(data);
         });
 
+        const keys = {
+                ArrowUp: false,
+                ArrowDown: false,
+                ArrowLeft: false,
+                ArrowRight: false
+            };
+
+            function sendManualControl() {
+                let vx = 0;
+                let vy = 0;
+
+                // Calculate vector based on held keys
+                if (keys.ArrowUp) vy -= 1.0;   // Up in image is negative Y
+                if (keys.ArrowDown) vy += 1.0;
+                if (keys.ArrowLeft) vx -= 1.0;
+                if (keys.ArrowRight) vx += 1.0;
+
+                // Emit to server
+                socket.emit('manual_drive', { vx: vx, vy: vy });
+            }
+
+            window.addEventListener('keydown', (e) => {
+        if (keys.hasOwnProperty(e.code)) {
+            e.preventDefault();
+            keys[e.code] = true;
+            sendManualControl();
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        if (keys.hasOwnProperty(e.code)) {
+            e.preventDefault(); // <--- ADD THIS LINE
+            keys[e.code] = false;
+            sendManualControl();
+        }
+    });
 
 
         function toggleTracking(enabled) {
